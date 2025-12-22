@@ -1,4 +1,10 @@
-const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000';
+const getApiUrl = () => {
+  const envUrl = (import.meta as any).env?.VITE_API_URL;
+  if (envUrl) return envUrl;
+  return 'http://127.0.0.1:8000';
+};
+
+const API_URL = getApiUrl();
 
 export interface AuthResponse {
     access_token: string;

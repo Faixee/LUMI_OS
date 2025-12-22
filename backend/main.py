@@ -118,8 +118,11 @@ async def audit_middleware(request: Request, call_next):
             response.headers["X-Request-ID"] = request_id
             response.headers["X-Response-Time-ms"] = str(int((time.time() - started) * 1000))
 
-# CORS CONFIG - Parse comma-separated origins string into list
-cors_origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()]
+# CORS CONFIG - Handle both list and string from settings
+if isinstance(settings.CORS_ORIGINS, list):
+    cors_origins = [origin.strip() for origin in settings.CORS_ORIGINS if origin.strip()]
+else:
+    cors_origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()]
 
 app.add_middleware(
     CORSMiddleware,

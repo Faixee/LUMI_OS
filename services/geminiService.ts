@@ -2,7 +2,13 @@ import { Student, AgentName, FeeRecord, SchoolConfig, Insight } from "../types";
 import { authService } from "./auth";
 
 // In production, point this to your backend URL
-const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000';
+const getApiUrl = () => {
+  const envUrl = (import.meta as any).env?.VITE_API_URL;
+  if (envUrl) return envUrl;
+  return 'http://127.0.0.1:8000';
+};
+
+const API_URL = getApiUrl();
 
 const getHeaders = () => {
     const user = authService.getUser();

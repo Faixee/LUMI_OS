@@ -3,7 +3,14 @@ import { Student, FeeRecord, TransportRoute, LibraryBook, ClassSession, Assignme
 import { authService } from './auth';
 
 // In production, this comes from the build environment. In dev, it falls back to localhost.
-const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000';
+const getApiUrl = () => {
+  const envUrl = (import.meta as any).env?.VITE_API_URL;
+  if (envUrl) return envUrl;
+  return 'http://localhost:8000';
+};
+
+const API_URL = getApiUrl();
+console.log(`[LUMIX] API_URL initialized as: ${API_URL}`);
 
 type ApiError = Error & { status?: number; code?: string };
 

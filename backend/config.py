@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 print(f"DEBUG CONFIG: SECRET_KEY first 5 chars: {os.getenv('SECRET_KEY')[:5] if os.getenv('SECRET_KEY') else 'None'}")
 
