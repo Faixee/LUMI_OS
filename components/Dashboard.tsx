@@ -1,0 +1,294 @@
+
+import React, { useMemo } from 'react';
+import { Student, DashboardMetrics, Insight, UserRole } from '../types';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { AlertTriangle, TrendingUp, Users, BookOpen, Activity, Zap, Shield, Target, Server, Clock, Database, Lock, Unlock, Cpu, Signal } from 'lucide-react';
+
+interface DashboardProps {
+  students: Student[];
+  insights: Insight[];
+  userRole: UserRole;
+  schoolName?: string;
+}
+
+const Dashboard: React.FC<DashboardProps> = ({ students, insights, userRole, schoolName }) => {
+  const metrics: DashboardMetrics = useMemo(() => {
+    const total = students.length;
+    const avgGPA = total > 0 ? students.reduce((acc, s) => acc + (s.gpa || 0), 0) / total : 0;
+    const avgAtt = total > 0 ? students.reduce((acc, s) => acc + (s.attendance || 0), 0) / total : 0;
+    const atRisk = students.filter(s => s.riskLevel === 'High').length;
+
+    return {
+      totalStudents: total,
+      averageGPA: parseFloat(avgGPA.toFixed(2)),
+      averageAttendance: Math.round(avgAtt),
+      atRiskCount: atRisk,
+    };
+  }, [students]);
+
+  // Data Health Calculation
+  const dataHealth = useMemo(() => {
+      if (students.length === 0) return { score: 0, missing: [] };
+      let hasGPA = 0, hasAtt = 0, hasNotes = 0;
+      students.forEach(s => {
+          if (s.gpa !== undefined && s.gpa > 0) hasGPA++;
+          if (s.attendance !== undefined && s.attendance > 0) hasAtt++;
+          if (s.notes) hasNotes++;
+      });
+      const score = Math.round(((hasGPA + hasAtt + hasNotes) / (students.length * 3)) * 100);
+      return { 
+          score, 
+          hasGPA: hasGPA > students.length * 0.5,
+          hasAtt: hasAtt > students.length * 0.5 
+      };
+  }, [students]);
+
+  const chartData = useMemo(() => {
+    return students.map(s => ({
+      name: s.name.split(' ')[0],
+      gpa: s.gpa || 0,
+      attendance: s.attendance || 0,
+      xp: s.xp || 0
+    })).slice(0, 10);
+  }, [students]);
+
+  // --- EMPTY STATE VIEW ---
+  if (students.length === 0) {
+      return (
+        <div className="flex-1 flex flex-col items-center justify-center w-full relative overflow-hidden h-full min-h-[calc(100vh-8rem)]">
+            {/* Background Tech Grid */}
+            <div className="absolute inset-0 pointer-events-none opacity-20" 
+                 style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.1) 1px, transparent 1px)', backgroundSize: '40px 40px' }}>
+            </div>
+            
+            <div className="relative z-10 w-full max-w-5xl mx-auto flex flex-col items-center">
+                <div className="w-24 h-24 md:w-32 md:h-32 bg-white/5 rounded-full flex items-center justify-center border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] relative mb-8 animate-pulse">
+                    <div className="absolute inset-0 border-t-2 border-cyan-500 rounded-full animate-spin"></div>
+                    <Server size={48} className="text-slate-500" />
+                </div>
+                
+                <div className="text-center mb-12">
+                    <h2 className="text-5xl md:text-7xl font-bold text-white font-sci-fi tracking-widest text-glow mb-4">SYSTEM STANDBY</h2>
+                    <p className="text-cyan-400 font-mono tracking-[0.5em] text-sm md:text-base uppercase">Awaiting Neural Link Initialization</p>
+                </div>
+
+                {/* Wide Protocol Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full px-4">
+                    {/* Protocol 1 */}
+                    <div className="p-8 border border-white/10 rounded-2xl backdrop-blur-sm relative overflow-hidden group hover:border-cyan-500/30 transition-all duration-500 h-full flex flex-col justify-center items-center text-center">
+                        <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <span className="font-mono text-cyan-400 text-4xl mb-4 opacity-50 font-bold">01</span>
+                        <strong className="text-white block mb-2 text-xl uppercase tracking-widest font-sci-fi">Ingest Data</strong>
+                        <p className="text-slate-400 font-mono text-sm leading-relaxed max-w-xs mx-auto">
+                            Connect via Nexus Bridge protocol to synchronize student records.
+                        </p>
+                    </div>
+
+                    {/* Protocol 2 */}
+                    <div className="p-8 border border-white/10 rounded-2xl backdrop-blur-sm relative overflow-hidden group hover:border-purple-500/30 transition-all duration-500 h-full flex flex-col justify-center items-center text-center">
+                        <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <span className="font-mono text-purple-400 text-4xl mb-4 opacity-50 font-bold">02</span>
+                        <strong className="text-white block mb-2 text-xl uppercase tracking-widest font-sci-fi">Activate Modules</strong>
+                        <p className="text-slate-400 font-mono text-sm leading-relaxed max-w-xs mx-auto">
+                            Initialize Neural Link systems to enable full OS functionality.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+      );
+  }
+
+  // Stats Configuration
+  const renderStats = () => {
+    if (userRole === 'admin' || userRole === 'developer') {
+        return [
+          { label: 'Active Scholars', value: metrics.totalStudents, icon: Users, color: 'text-indigo-400', borderColor: 'border-indigo-500/50' },
+          { label: 'Mean GPA', value: dataHealth.hasGPA ? metrics.averageGPA : 'N/A', icon: Target, color: dataHealth.hasGPA ? 'text-emerald-400' : 'text-slate-600', borderColor: 'border-emerald-500/50' },
+          { label: 'Data Density', value: `${dataHealth.score}%`, icon: Database, color: dataHealth.score > 80 ? 'text-cyan-400' : 'text-amber-400', borderColor: 'border-cyan-500/50' },
+          { label: 'At Risk', value: dataHealth.hasAtt ? metrics.atRiskCount : '--', icon: AlertTriangle, color: 'text-rose-400', borderColor: 'border-rose-500/50' }
+        ];
+    }
+    return [
+        { label: 'Students', value: metrics.totalStudents, icon: Users, color: 'text-purple-400', borderColor: 'border-purple-500/50' },
+        { label: 'Avg Attendance', value: `${metrics.averageAttendance}%`, icon: Clock, color: 'text-cyan-400', borderColor: 'border-cyan-500/50' }
+    ];
+  };
+
+  const stats = renderStats();
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-1000">
+      
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-white/5 pb-6 relative tech-border gap-4">
+        <div>
+          <h2 className="text-4xl md:text-6xl font-bold text-white font-sci-fi tracking-tight mb-2 flex items-center gap-3 uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] flex-wrap">
+             {schoolName ? schoolName : 'COMMAND CENTER'}
+             <span className="px-2 py-0.5 rounded text-[10px] border border-cyan-500 text-cyan-500 font-mono tracking-widest opacity-80 bg-cyan-950/30 whitespace-nowrap">v.3.0.1</span>
+          </h2>
+          <div className="flex items-center gap-3">
+             <div className="flex gap-1">
+                <span className="w-1 h-3 bg-emerald-500 rounded-sm animate-[pulse_1s_infinite]"></span>
+                <span className="w-1 h-3 bg-emerald-500/50 rounded-sm"></span>
+                <span className="w-1 h-3 bg-emerald-500/30 rounded-sm"></span>
+             </div>
+             <p className="text-cyan-400/60 font-mono text-sm tracking-wider uppercase flex items-center gap-2">
+               <Cpu size={14} /> System Optimal • Neural Link Active
+             </p>
+          </div>
+        </div>
+        
+        <div className="hidden md:block">
+            <div className="glass-panel px-6 py-4 flex items-center gap-6 rounded-xl border-t border-white/10">
+                <div className="text-right">
+                    <div className="text-3xl font-bold font-sci-fi text-white tracking-widest">{new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                    <div className="text-xs text-indigo-300 font-mono tracking-[0.2em] uppercase">{new Date().toLocaleDateString()}</div>
+                </div>
+                <div className="h-10 w-[1px] bg-white/10"></div>
+                <div className="flex flex-col items-center">
+                    <Signal size={20} className="text-emerald-400 animate-pulse" />
+                    <span className="text-[9px] text-emerald-400/80 font-mono mt-1">5ms</span>
+                </div>
+            </div>
+        </div>
+      </div>
+
+      {/* 3D Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+        {stats.map((stat, idx) => (
+          <div key={idx} className={`holo-card p-6 group relative overflow-hidden transition-all duration-500`}>
+            {/* Background Gradient Glow */}
+            <div className={`absolute -right-10 -top-10 w-40 h-40 bg-gradient-to-br from-transparent to-${stat.color.split('-')[1]}-500/20 rounded-full blur-3xl group-hover:blur-2xl transition-all`}></div>
+            
+            <div className="flex justify-between items-start relative z-10">
+              <div>
+                <p className="text-slate-400 text-[10px] font-mono uppercase tracking-[0.2em] mb-1 opacity-70 group-hover:opacity-100 transition-opacity">{stat.label}</p>
+                <h3 className={`text-4xl md:text-5xl font-bold font-sci-fi text-white drop-shadow-lg tracking-tight mt-2`}>
+                    {stat.value}
+                </h3>
+              </div>
+              <div className={`p-3 rounded-xl bg-white/5 border border-white/10 group-hover:scale-110 transition-transform duration-300 group-hover:shadow-[0_0_15px_rgba(255,255,255,0.1)]`}>
+                <stat.icon size={24} className={`${stat.color}`} />
+              </div>
+            </div>
+            
+            {/* Bottom Tech Bar */}
+            <div className="mt-6 flex items-center gap-2">
+                <div className="h-1 w-2 bg-white/20 rounded-full"></div>
+                <div className="h-1 w-2 bg-white/20 rounded-full"></div>
+                <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
+                    <div className={`h-full ${stat.color.replace('text', 'bg')} w-full shadow-[0_0_10px_currentColor] animate-[shimmer_2s_infinite]`}></div>
+                </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Main Chart */}
+        <div className="lg:col-span-2 glass-panel p-0 rounded-2xl flex flex-col relative tech-border min-h-[400px]">
+            <div className="p-6 border-b border-white/5 flex justify-between items-center bg-white/2 backdrop-blur-sm">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-cyan-500/10 rounded-lg">
+                        <Activity size={20} className="text-cyan-400" />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-white font-sci-fi tracking-wide">
+                            {dataHealth.hasGPA ? "ACADEMIC VELOCITY" : "DATA INGESTION REQUIRED"}
+                        </h3>
+                        <p className="text-[10px] text-slate-500 font-mono uppercase">Performance Vector Analysis</p>
+                    </div>
+                </div>
+                {dataHealth.hasGPA && (
+                    <div className="flex gap-4 text-[10px] font-mono text-slate-400 hidden sm:flex">
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-500"></span> GPA</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500"></span> XP</span>
+                    </div>
+                )}
+            </div>
+            
+            <div className="flex-1 w-full p-4 relative h-[300px]">
+                {dataHealth.hasGPA ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={chartData}>
+                            <defs>
+                                <linearGradient id="neonGradient" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#00f3ff" stopOpacity={0.3}/>
+                                    <stop offset="95%" stopColor="#00f3ff" stopOpacity={0}/>
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} opacity={0.3} />
+                            <XAxis dataKey="name" stroke="#64748b" tick={{fontSize: 10, fontFamily: 'JetBrains Mono', fill: '#64748b'}} axisLine={false} tickLine={false} dy={10} />
+                            <YAxis stroke="#64748b" tick={{fontSize: 10, fontFamily: 'JetBrains Mono', fill: '#64748b'}} axisLine={false} tickLine={false} dx={-10} />
+                            <Tooltip 
+                                contentStyle={{ backgroundColor: 'rgba(10, 10, 25, 0.9)', border: '1px solid rgba(0, 243, 255, 0.3)', borderRadius: '8px', boxShadow: '0 0 20px rgba(0,0,0,0.5)' }} 
+                                itemStyle={{ color: '#fff', fontFamily: 'JetBrains Mono', fontSize: '12px' }}
+                                labelStyle={{ color: '#00f3ff', marginBottom: '5px', fontFamily: 'Rajdhani', fontWeight: 'bold' }}
+                            />
+                            <Area type="monotone" dataKey="gpa" stroke="#00f3ff" strokeWidth={3} fillOpacity={1} fill="url(#neonGradient)" animationDuration={2000} />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
+                         <div className="relative">
+                            <div className="absolute inset-0 bg-amber-500/20 blur-xl rounded-full"></div>
+                            <AlertTriangle size={48} className="text-amber-500 mb-4 animate-bounce relative z-10" />
+                         </div>
+                         <h4 className="text-2xl font-bold text-white font-sci-fi tracking-widest">PARTIAL DATA DETECTED</h4>
+                         <p className="text-slate-400 text-sm max-w-md mt-2 font-mono">
+                             Academic vectors hidden. Please initiate academic record upload via Nexus Bridge.
+                         </p>
+                         <button className="mt-6 px-6 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-mono text-cyan-400 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.1)] transition-all">
+                             + INITIATE UPLOAD PROTOCOL
+                         </button>
+                    </div>
+                )}
+            </div>
+        </div>
+
+        {/* System Capability Monitor */}
+        <div className="holo-card p-6 flex flex-col relative overflow-hidden h-full">
+            <h3 className="text-lg font-bold text-white font-sci-fi mb-6 flex items-center gap-2 relative z-10">
+                <Shield size={20} className="text-purple-400" />
+                SYSTEM CAPABILITIES
+            </h3>
+
+            <div className="space-y-4 relative z-10 flex-1">
+                {[
+                    { label: 'Identity Core', count: metrics.totalStudents, active: true, icon: Users, color: 'text-emerald-400', border: 'border-emerald-500/30' },
+                    { label: 'Astra Predictions', status: dataHealth.hasGPA ? 'ACTIVE' : 'OFFLINE', active: dataHealth.hasGPA, icon: Target, color: 'text-indigo-400', border: 'border-indigo-500/30' },
+                    { label: 'Risk Engine', status: dataHealth.hasAtt ? 'MONITORING' : 'STANDBY', active: dataHealth.hasAtt, icon: AlertTriangle, color: 'text-rose-400', border: 'border-rose-500/30' }
+                ].map((item, i) => (
+                    <div key={i} className={`p-4 rounded-xl border flex items-center justify-between transition-all hover:bg-white/5 ${item.active ? 'bg-black/20 ' + item.border : 'bg-white/5 border-white/5 opacity-50'}`}>
+                        <div className="flex items-center gap-3">
+                            <item.icon size={16} className={item.active ? item.color : "text-slate-500"} />
+                            <div>
+                                <div className="text-sm font-bold text-white">{item.label}</div>
+                                <div className="text-[10px] text-slate-400 font-mono tracking-wider">
+                                    {item.count ? `${item.count} RECORDS` : item.status}
+                                </div>
+                            </div>
+                        </div>
+                        {item.active ? <Unlock size={14} className={item.color} /> : <Lock size={14} className="text-slate-600" />}
+                    </div>
+                ))}
+            </div>
+            
+            <div className="mt-auto pt-6">
+                <div className="flex justify-between text-[10px] text-slate-400 font-mono mb-2 uppercase">
+                    <span>Data Integrity</span>
+                    <span className="text-cyan-400">{dataHealth.score}%</span>
+                </div>
+                <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-purple-500 to-cyan-500 transition-all duration-1000 shadow-[0_0_10px_#06b6d4]" style={{ width: `${dataHealth.score}%` }}></div>
+                </div>
+            </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Dashboard;

@@ -1,0 +1,19 @@
+<svg width="1280" height="720" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1e293b;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#bg)" />
+  <rect x="100" y="100" width="1080" height="520" rx="20" fill="none" stroke="#06b6d4" stroke-width="2" stroke-dasharray="10 5" opacity="0.5" />
+  <text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" font-family="monospace" font-size="24" fill="#94a3b8">
+    IMAGE NOT FOUND
+  </text>
+  <text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="32" font-weight="bold" fill="#ffffff">
+    Please save your image to:
+  </text>
+  <text x="50%" y="62%" dominant-baseline="middle" text-anchor="middle" font-family="monospace" font-size="28" fill="#22d3ee">
+    public/dashboard-preview.png
+  </text>
+</svg>
