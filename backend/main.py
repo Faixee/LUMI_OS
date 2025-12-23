@@ -98,6 +98,16 @@ app.middleware("http")(add_security_headers)
 
 
 @app.middleware("http")
+async def pna_middleware(request: Request, call_next):
+    """
+    Adds support for Private Network Access (PNA) to all responses.
+    """
+    response = await call_next(request)
+    if request.headers.get("Access-Control-Request-Private-Network") == "true":
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+    return response
+
+@app.middleware("http")
 async def audit_middleware(request: Request, call_next):
     request_id = secrets.token_urlsafe(12)
     started = time.time()
@@ -208,14 +218,27 @@ app.add_middleware(
     max_age=600,
 )
 
-# FIX: allow OPTIONS (CORS preflight) for all routes
+# FIX: allow OPTIONS (CORS preflight) for all routes including Private Network Access
 @app.options("/{path:path}")
 @limiter.exempt
 async def preflight(path: str, request: Request):
     """
-    Fixes CORS 400 Bad Request caused by SlowAPI blocking OPTIONS requests.
+    Fixes CORS 400 Bad Request caused by SlowAPI blocking OPTIONS requests
+    and adds support for Private Network Access (PNA).
     """
-    return {}
+    response = JSONResponse(content={})
+    origin = request.headers.get("origin")
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-Requested-With, X-Internal-Dev-Secret"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        
+    # Support for Chrome's Private Network Access security feature
+    if request.headers.get("Access-Control-Request-Private-Network") == "true":
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+        
+    return response
 
 # ----------------------------
 # VITE DEV SERVER PROXY (FIX)
