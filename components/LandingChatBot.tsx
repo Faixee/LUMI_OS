@@ -359,9 +359,217 @@ const LandingChatBot: React.FC<LandingChatBotProps> = ({ onScrollTo }) => {
         setIsListening(false);
     };
 
-    // → UI Return (Keep mostly same, only wire startCall, endCall, handleSend, speak)
+    // → UI Return
     return (
-        <div>{/* Your existing JSX, wire buttons to startCall/endCall, voice input, and handleSend → already updated in above code */}</div>
+        <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end pointer-events-none">
+            {/* Chat Window */}
+            {isOpen && (
+                <div className="pointer-events-auto w-[360px] md:w-[420px] bg-black/80 backdrop-blur-xl border border-cyan-500/30 rounded-2xl shadow-2xl shadow-cyan-500/20 overflow-hidden flex flex-col mb-4 transition-all duration-300 animate-in slide-in-from-bottom-10 fade-in zoom-in-95">
+                    
+                    {/* Header */}
+                    <div className="p-4 border-b border-white/10 bg-white/5 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center border border-cyan-500/50 relative">
+                                <Bot size={20} className="text-cyan-400" />
+                                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-black animate-pulse"></div>
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-white font-sci-fi">NOVA <span className="text-xs text-cyan-400 font-mono ml-1">v2.4</span></h3>
+                                <div className="flex items-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                                    <span className="text-[10px] text-emerald-400 font-mono uppercase tracking-wider">Online</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="relative">
+                                <button 
+                                    onClick={() => setShowLangMenu(!showLangMenu)}
+                                    className="p-2 hover:bg-white/10 rounded-lg transition-colors text-slate-400 hover:text-white"
+                                    title="Change Language"
+                                >
+                                    <Globe size={18} />
+                                </button>
+                                
+                                {showLangMenu && (
+                                    <div className="absolute right-0 top-full mt-2 bg-slate-900 border border-white/10 rounded-lg shadow-xl py-1 w-48 z-50">
+                                        {SUPPORTED_LANGUAGES.map(lang => (
+                                            <button
+                                                key={lang.code}
+                                                onClick={() => {
+                                                    setCurrentLang(lang);
+                                                    setShowLangMenu(false);
+                                                }}
+                                                className={`w-full text-left px-4 py-2 text-sm hover:bg-white/5 flex items-center justify-between ${currentLang.code === lang.code ? 'text-cyan-400 bg-cyan-950/30' : 'text-slate-300'}`}
+                                            >
+                                                <span>{lang.name}</span>
+                                                <span className="text-xs opacity-50 font-mono">{lang.native}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <button 
+                                onClick={() => setIsSpeaking(!isSpeaking)}
+                                className={`p-2 rounded-lg transition-colors ${isSpeaking ? 'text-cyan-400 hover:bg-cyan-950/30' : 'text-slate-500 hover:bg-white/10'}`}
+                                title={isSpeaking ? "Mute Voice" : "Enable Voice"}
+                            >
+                                {isSpeaking ? <Volume2 size={18} /> : <VolumeX size={18} />}
+                            </button>
+                            <button 
+                                onClick={() => setIsOpen(false)}
+                                className="p-2 hover:bg-white/10 rounded-lg transition-colors text-slate-400 hover:text-white"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Voice Call Mode */}
+                    {callState.isActive ? (
+                        <div className="flex-1 bg-black/50 p-6 flex flex-col items-center justify-center min-h-[300px] relative overflow-hidden">
+                            {/* Visualizer Canvas */}
+                            <canvas 
+                                ref={canvasRef} 
+                                width={400} 
+                                height={200} 
+                                className="absolute inset-0 w-full h-full opacity-30 pointer-events-none"
+                            />
+                            
+                            <div className="relative z-10 text-center space-y-6">
+                                <div className="relative">
+                                    <div className="w-24 h-24 rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center mx-auto animate-pulse">
+                                        <div className="w-16 h-16 rounded-full bg-cyan-500/20 flex items-center justify-center">
+                                            <Bot size={32} className="text-cyan-400" />
+                                        </div>
+                                    </div>
+                                    {isListening && (
+                                        <div className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-bounce">
+                                            LISTENING
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <h3 className="text-xl font-bold text-white font-sci-fi tracking-wider">NEURAL LINK ACTIVE</h3>
+                                    <p className="text-cyan-400 font-mono text-xs mt-1 animate-pulse">
+                                        {isListening ? "Listening..." : "Processing..."}
+                                    </p>
+                                </div>
+
+                                {speechError && (
+                                    <div className="text-red-400 text-xs bg-red-950/30 px-3 py-1 rounded-full border border-red-500/20">
+                                        {speechError}
+                                    </div>
+                                )}
+
+                                <div className="flex items-center gap-4 justify-center">
+                                    <button 
+                                        onClick={toggleMute}
+                                        className={`p-4 rounded-full transition-all ${callState.isMuted ? 'bg-red-500/20 text-red-400 border border-red-500/50' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                                    >
+                                        {callState.isMuted ? <MicOff size={24} /> : <Mic size={24} />}
+                                    </button>
+                                    <button 
+                                        onClick={endCall}
+                                        className="p-4 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20 transition-all hover:scale-105"
+                                    >
+                                        <PhoneOff size={24} />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        /* Text Chat Mode */
+                        <>
+                            {/* Messages */}
+                            <div className="h-[350px] overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+                                {messages.map((msg) => (
+                                    <div 
+                                        key={msg.id} 
+                                        className={`flex gap-3 ${msg.sender === 'user' ? 'flex-row-reverse' : ''}`}
+                                    >
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${msg.sender === 'ai' ? 'bg-cyan-500/20 border border-cyan-500/30' : 'bg-purple-500/20 border border-purple-500/30'}`}>
+                                            {msg.sender === 'ai' ? <Bot size={14} className="text-cyan-400" /> : <User size={14} className="text-purple-400" />}
+                                        </div>
+                                        <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${
+                                            msg.sender === 'ai' 
+                                                ? 'bg-white/5 border border-white/10 text-slate-300 rounded-tl-none' 
+                                                : 'bg-cyan-600 text-white rounded-tr-none shadow-lg shadow-cyan-500/10'
+                                        }`}>
+                                            {msg.text}
+                                            <div className="text-[10px] opacity-40 mt-1 text-right font-mono">
+                                                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                {isTyping && (
+                                    <div className="flex gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center shrink-0">
+                                            <Bot size={14} className="text-cyan-400" />
+                                        </div>
+                                        <div className="bg-white/5 border border-white/10 px-4 py-3 rounded-2xl rounded-tl-none flex gap-1">
+                                            <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-bounce"></span>
+                                            <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-bounce delay-100"></span>
+                                            <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-bounce delay-200"></span>
+                                        </div>
+                                    </div>
+                                )}
+                                <div ref={messagesEndRef} />
+                            </div>
+
+                            {/* Input Area */}
+                            <div className="p-4 border-t border-white/10 bg-white/5 space-y-3">
+                                {/* Voice Call Prompt */}
+                                <button 
+                                    onClick={startCall}
+                                    className="w-full py-2 bg-gradient-to-r from-cyan-900/30 to-purple-900/30 border border-white/10 rounded-lg flex items-center justify-center gap-2 text-xs font-mono text-cyan-300 hover:border-cyan-500/30 transition-all group"
+                                >
+                                    <Phone size={12} className="group-hover:animate-bounce" />
+                                    <span>START VOICE SESSION</span>
+                                    <span className="px-1.5 py-0.5 bg-cyan-500/20 rounded text-[9px] border border-cyan-500/30">BETA</span>
+                                </button>
+
+                                <div className="relative flex items-center gap-2">
+                                    <input 
+                                        type="text" 
+                                        value={input}
+                                        onChange={(e) => setInput(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                                        placeholder={`Message NOVA (${currentLang.name})...`}
+                                        className="flex-1 bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 font-mono"
+                                    />
+                                    <button 
+                                        onClick={() => handleSend()}
+                                        disabled={!input.trim() || isTyping}
+                                        className="p-3 bg-cyan-500 hover:bg-cyan-400 text-black rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-cyan-500/20"
+                                    >
+                                        <Send size={18} />
+                                    </button>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </div>
+            )}
+
+            {/* Toggle Button */}
+            <button 
+                onClick={() => setIsOpen(!isOpen)}
+                className={`pointer-events-auto group relative flex items-center justify-center w-14 h-14 rounded-full transition-all duration-300 shadow-lg shadow-cyan-500/20 ${isOpen ? 'bg-slate-800 text-slate-400 rotate-90' : 'bg-cyan-500 text-black hover:scale-110 hover:shadow-cyan-500/40'}`}
+            >
+                {isOpen ? <X size={24} /> : <MessageSquare size={24} className="fill-current" />}
+                
+                {!isOpen && (
+                    <>
+                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-black animate-ping"></span>
+                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-black"></span>
+                    </>
+                )}
+            </button>
+        </div>
     );
 };
 
