@@ -109,51 +109,46 @@ const LandingChatBot: React.FC<LandingChatBotProps> = ({ onScrollTo }) => {
         setIsTyping(true);
 
         try {
-            setMessages(currentMessages => {
-                const history = currentMessages.map(m => ({
-                    role: m.sender === 'user' ? 'user' : 'assistant',
-                    content: m.text
-                }));
+            // → NEW API CALL
+            api.sendLandingChat(textToSend, messages.map(m => ({
+                role: m.sender === 'user' ? 'user' : 'assistant',
+                content: m.text
+            })), currentLang.code).then(data => {
+                let responseText = data.response;
 
-                // → NEW API CALL
-                api.sendLandingChat(textToSend, history, currentLang.code).then(data => {
-                    let responseText = data.response;
-
-                    // → JSON Tool Handling
-                    try {
-                        let cleanText = responseText.trim();
-                        if (cleanText.includes('```')) {
-                            const match = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-                            if (match && match[1]) cleanText = match[1].trim();
+                // → JSON Tool Handling
+                try {
+                    let cleanText = responseText.trim();
+                    if (cleanText.includes('```')) {
+                        const match = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+                        if (match && match[1]) cleanText = match[1].trim();
+                    }
+                    if (cleanText.startsWith('{') && cleanText.endsWith('}')) {
+                        const parsed = JSON.parse(cleanText);
+                        responseText = parsed.text || responseText;
+                        if (parsed.action === 'scroll' || parsed.action === 'navigate') {
+                            const target = String(parsed.target || '').trim();
+                            if (target.startsWith('/')) navigate(target);
+                            else if (target) onScrollTo(target);
                         }
-                        if (cleanText.startsWith('{') && cleanText.endsWith('}')) {
-                            const parsed = JSON.parse(cleanText);
-                            responseText = parsed.text || responseText;
-                            if (parsed.action === 'scroll' || parsed.action === 'navigate') {
-                                const target = String(parsed.target || '').trim();
-                                if (target.startsWith('/')) navigate(target);
-                                else if (target) onScrollTo(target);
-                            }
-                        }
-                    } catch (e) { console.warn("Failed to parse AI tool action:", e); }
+                    }
+                } catch (e) { console.warn("Failed to parse AI tool action:", e); }
 
-                    const aiMsg: Message = { id: (Date.now()+1).toString(), text: responseText, sender: 'ai', timestamp: new Date() };
-                    setMessages(prev => [...prev, aiMsg]);
-                    speak(responseText);
-                    setIsTyping(false);
-                }).catch(e => {
-                    console.error("Landing chat error:", e);
-                    let text = currentLang.code === 'ur' ? "میرا اعصابی لنک فی الحال غیر مستحکم ہے۔ براہ کرم بعد میں دوبارہ کوشش کریں۔" : "My neural link is currently unstable. Please try again later.";
-                    setMessages(prev => [...prev, { id: Date.now().toString(), text, sender: 'ai', timestamp: new Date() }]);
-                    setIsTyping(false);
-                });
-                return currentMessages;
+                const aiMsg: Message = { id: (Date.now()+1).toString(), text: responseText, sender: 'ai', timestamp: new Date() };
+                setMessages(prev => [...prev, aiMsg]);
+                speak(responseText);
+                setIsTyping(false);
+            }).catch(e => {
+                console.error("Landing chat error:", e);
+                let text = currentLang.code === 'ur' ? "میرا اعصابی لنک فی الحال غیر مستحکم ہے۔ براہ کرم بعد میں دوبارہ کوشش کریں۔" : "My neural link is currently unstable. Please try again later.";
+                setMessages(prev => [...prev, { id: Date.now().toString(), text, sender: 'ai', timestamp: new Date() }]);
+                setIsTyping(false);
             });
         } catch (error) {
             console.error("Chat error:", error);
             setIsTyping(false);
         }
-    }, [currentLang.code, navigate, onScrollTo, speak]);
+    }, [currentLang.code, navigate, onScrollTo, speak, messages]);
 
     // → LANGUAGE GREETING
     useEffect(() => {

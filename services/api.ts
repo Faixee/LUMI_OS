@@ -227,7 +227,7 @@ export const api = {
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
       
       try {
-          const url = `${API_URL}`;
+          const url = `${API_URL}/ai/landing-chat`;
           console.log(`[LUMIX] Sending landing chat to: ${url} (API_URL: ${API_URL}, hostname: ${typeof window !== 'undefined' ? window.location.hostname : 'N/A'})`);
           
           const res = await fetch(url, {
