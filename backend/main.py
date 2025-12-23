@@ -236,7 +236,13 @@ async def favicon():
 # ----------------------------
 # DATABASE
 # ----------------------------
+# Only create tables if we're not in a migration-heavy production env
+# In true prod, we'd use Alembic
 models.Base.metadata.create_all(bind=database.engine)
+
+# PRODUCTION CHECK: Warn if using SQLite in production
+if settings.ENVIRONMENT == "production" and "sqlite" in str(database.engine.url):
+    logger.warning("PRODUCTION ALERT: Using SQLite in production environment. Data will not persist across restarts/cold-starts on serverless platforms like Vercel.")
 
 try:
     if "sqlite" in str(database.engine.url):
@@ -303,6 +309,58 @@ try:
                     pass
 except Exception:
     pass
+
+# --- AUTO-SEEDING (Self-Healing) ---
+# Ensure at least one admin exists if the DB is empty (common on cold starts)
+try:
+    with database.SessionLocal() as db:
+        admin_exists = db.query(models.User).filter(models.User.username == "admin").first()
+        if not admin_exists:
+            logger.info("Self-Healing: Creating default admin user...")
+            new_admin = models.User(
+                username="admin",
+                password_hash=auth.get_password_hash("lumix123"),
+                full_name="System Administrator",
+                role="admin",
+                school_id="default",
+                subscription_status="active",
+                subscription_expiry=datetime.utcnow() + timedelta(days=3650), # 10 years
+                plan="enterprise"
+            )
+            db.add(new_admin)
+            
+            # Ensure default school config exists
+            school_exists = db.query(models.SchoolConfig).filter(models.SchoolConfig.school_id == "default").first()
+            if not school_exists:
+                default_school = models.SchoolConfig(
+                    school_id="default",
+                    name="LumiX Academy",
+                    motto="Inspired Learning. Bold Futures.",
+                    primary_color="#06b6d4",
+                    secondary_color="#6366f1",
+                    security_level="standard",
+                    ai_creativity=50,
+                    ai_enabled=True
+                )
+                db.add(default_school)
+            
+            # Add a sample student so the UI isn't empty
+            sample_student = models.Student(
+                name="Demo Student",
+                email="student@lumix.edu",
+                grade_level=10,
+                class_name="10-A",
+                attendance=95.5,
+                gpa=3.8,
+                behavior_score=90,
+                school_id="default"
+            )
+            db.add(sample_student)
+            
+            db.commit()
+            logger.info("Self-Healing: Default state restored.")
+except Exception as e:
+    logger.error(f"Self-Healing failed: {e}")
 
 # ----------------------------
 # GOOGLE GENAI
@@ -1270,6 +1328,12 @@ async def get_school_config(db: Session = Depends(get_db),
         db.add(config)
         db.commit()
         db.refresh(config)
+    
+    # Ensure no nulls for critical branding fields
+    if not config.name: config.name = "LumiX Academy"
+    if not config.motto: config.motto = "Inspired Learning. Bold Futures."
+    if not config.primary_color: config.primary_color = "#06b6d4"
+    if not config.secondary_color: config.secondary_color = "#6366f1"
     
     return config
 

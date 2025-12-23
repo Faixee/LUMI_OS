@@ -6,7 +6,15 @@ import { authService } from './auth';
 const getApiUrl = () => {
   const envUrl = (import.meta as any).env?.VITE_API_URL;
   if (envUrl) return envUrl;
-  return 'http://localhost:8000';
+  
+  if (typeof window !== 'undefined' && 
+      window.location.hostname !== 'localhost' && 
+      window.location.hostname !== '127.0.0.1' &&
+      !window.location.hostname.startsWith('192.168.')) {
+    return '/api';
+  }
+  
+  return 'http://127.0.0.1:8000';
 };
 
 const API_URL = getApiUrl();
