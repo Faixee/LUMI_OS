@@ -236,7 +236,19 @@ export const api = {
           });
           
           clearTimeout(timeoutId);
-          const data = await res.json();
+          
+          // Get the response text first to handle non-JSON errors
+          const responseText = await res.text();
+          let data;
+          try {
+              data = JSON.parse(responseText);
+          } catch (parseError) {
+              console.error(`[LUMIX] Failed to parse response as JSON:`, responseText);
+              return { 
+                  response: `System error (HTTP ${res.status}). The server returned a non-JSON response. Please check backend logs.` 
+              };
+          }
+
           if (!res.ok) {
               console.error(`[LUMIX] Landing chat error (${res.status}):`, data);
               return { response: data.detail || data.message || "My neural link is currently unstable. Please try again later." };
