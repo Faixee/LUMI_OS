@@ -7,15 +7,14 @@ const getApiUrl = () => {
   // Check hostname first to avoid PNA blocks when on a public domain
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
-    // If we are on Vercel or any public domain, we MUST use the relative /api path
-    // to talk to the Vercel-deployed backend. Talking to 127.0.0.1 from a public 
-    // HTTPS domain is blocked by browsers as "Private Network Access".
+    // 2. If we're on a public domain (like Vercel), use the current origin + /api
     if (hostname !== 'localhost' && 
         hostname !== '127.0.0.1' &&
         !hostname.startsWith('192.168.') &&
         !hostname.startsWith('10.') &&
         !hostname.startsWith('172.')) {
-      return '/api';
+      // Use absolute URL to current origin to avoid any Edge-specific relative path issues
+      return `${window.location.origin}/api`;
     }
   }
 

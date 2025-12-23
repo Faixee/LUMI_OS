@@ -10,7 +10,7 @@ const getApiUrl = () => {
         !hostname.startsWith('192.168.') &&
         !hostname.startsWith('10.') &&
         !hostname.startsWith('172.')) {
-      return '/api';
+      return `${window.location.origin}/api`;
     }
   }
 
