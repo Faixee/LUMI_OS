@@ -16,7 +16,10 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "/((?!api/).*)",
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
       "dest": "/index.html"
     }
   ]
