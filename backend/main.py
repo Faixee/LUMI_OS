@@ -1652,27 +1652,11 @@ async def ai_landing_chat_proxy(req: schemas.ChatRequest, request: Request, db: 
     # for now, we allow localhost/127.0.0.1 as per CORS settings
     
     started = time.time()
-    log_row = None
     
-    try:
-        log_row = models.AIRequestLog(
-            user_id=None,
-            school_id=None,
-            role="public",
-            plan=None,
-            endpoint=request.url.path,
-            request_type="landing_chat",
-            prompt_redacted=_redact_prompt(req.prompt),
-            input_refs=None,
-            success=False,
-        )
-        db.add(log_row)
-        db.flush()
-    except Exception as e:
-        logger.warning(f"Failed to log AI request to database: {e}")
-        # We continue even if logging fails
-        db.rollback()
-
+    # Use a dummy AIRequestLog for logging if user is not authenticated/known
+    # We skip full DB logging for this public endpoint to avoid spam filling up the DB
+    # or wrap it in a try/except block.
+    
     try:
         # Convert history from Pydantic models to dicts for OpenAI
         history_dicts = []
@@ -1688,31 +1672,10 @@ async def ai_landing_chat_proxy(req: schemas.ChatRequest, request: Request, db: 
 
         text = result.get("response", "My neural link is currently unstable.")
         
-        if log_row:
-            try:
-                log_row.output_hash = _hash_text(text)
-                log_row.output_len = len(text)
-                log_row.success = True
-                log_row.duration_ms = int((time.time() - started) * 1000)
-                
-                if "error" in result:
-                    log_row.error_type = result["error"]
-                    
-                db.commit()
-            except Exception as e:
-                logger.warning(f"Failed to update AI log: {e}")
-                db.rollback()
-                
         return {"response": text}
 
     except Exception as e:
         logger.error(f"DEBUG LANDING CHAT ERROR: {e}")
-        if log_row:
-            try:
-                log_row.error_type = type(e).__name__
-                db.commit()
-            except Exception:
-                db.rollback()
         return {"response": "My neural link is currently unstable. Please try again later."}
 @app.post("/ai/predict")
 @limiter.limit("10/minute")
