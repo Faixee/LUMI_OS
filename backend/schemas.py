@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 # --- AUTH ---
@@ -74,11 +74,22 @@ class ChatMessage(BaseModel):
     role: str
     content: str
 
+class GradingResult(BaseModel):
+    student: str
+    score: int
+    feedback: str
+    annotations: Optional[List[Dict[str, Any]]] = []
+    insights: Optional[Dict[str, Any]] = {}
+
 class ChatRequest(BaseModel):
     prompt: str
     role: str = "system"
     context: str = ""
     history: Optional[List[ChatMessage]] = []
+    language: Optional[str] = "en" # Added for multi-language support
+
+class URLAnalysisRequest(BaseModel):
+    url: str
 
 class ChatResponse(BaseModel):
     response: str
@@ -95,6 +106,34 @@ class AIKillSwitchRequest(BaseModel):
     school_id: Optional[str] = None
     enabled: bool
     reason: Optional[str] = None
+
+class SchoolConfigUpdate(BaseModel):
+    name: Optional[str] = None
+    motto: Optional[str] = None
+    primary_color: Optional[str] = None
+    secondary_color: Optional[str] = None
+    logo_url: Optional[str] = None
+    website_context: Optional[str] = None
+    modules_json: Optional[str] = None # Expecting a JSON string
+    security_level: Optional[str] = "standard"
+    ai_creativity: Optional[int] = 50
+
+class SchoolConfigResponse(BaseModel):
+    school_id: str
+    name: Optional[str] = None
+    motto: Optional[str] = None
+    primary_color: Optional[str] = None
+    secondary_color: Optional[str] = None
+    logo_url: Optional[str] = None
+    website_context: Optional[str] = None
+    modules_json: Optional[str] = None
+    security_level: str
+    ai_creativity: int
+    ai_enabled: bool
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
 
 class AuditLogResponse(BaseModel):
     id: int

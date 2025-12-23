@@ -2,16 +2,17 @@
 import React, { useMemo } from 'react';
 import { Student, DashboardMetrics, Insight, UserRole } from '../types';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { AlertTriangle, TrendingUp, Users, BookOpen, Activity, Zap, Shield, Target, Server, Clock, Database, Lock, Unlock, Cpu, Signal } from 'lucide-react';
+import { AlertTriangle, TrendingUp, Users, BookOpen, Activity, Zap, Shield, Target, Server, Clock, Database, Lock, Unlock, Cpu, Signal, Bus, Library, DollarSign, Brain } from 'lucide-react';
 
 interface DashboardProps {
   students: Student[];
   insights: Insight[];
   userRole: UserRole;
   schoolName?: string;
+  onNavigate?: (view: string) => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ students, insights, userRole, schoolName }) => {
+const Dashboard: React.FC<DashboardProps> = ({ students, insights, userRole, schoolName, onNavigate }) => {
   const metrics: DashboardMetrics = useMemo(() => {
     const total = students.length;
     const avgGPA = total > 0 ? students.reduce((acc, s) => acc + (s.gpa || 0), 0) / total : 0;
@@ -52,53 +53,6 @@ const Dashboard: React.FC<DashboardProps> = ({ students, insights, userRole, sch
     })).slice(0, 10);
   }, [students]);
 
-  // --- EMPTY STATE VIEW ---
-  if (students.length === 0) {
-      return (
-        <div className="flex-1 flex flex-col items-center justify-center w-full relative overflow-hidden h-full min-h-[calc(100vh-8rem)]">
-            {/* Background Tech Grid */}
-            <div className="absolute inset-0 pointer-events-none opacity-20" 
-                 style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.1) 1px, transparent 1px)', backgroundSize: '40px 40px' }}>
-            </div>
-            
-            <div className="relative z-10 w-full max-w-5xl mx-auto flex flex-col items-center">
-                <div className="w-24 h-24 md:w-32 md:h-32 bg-white/5 rounded-full flex items-center justify-center border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] relative mb-8 animate-pulse">
-                    <div className="absolute inset-0 border-t-2 border-cyan-500 rounded-full animate-spin"></div>
-                    <Server size={48} className="text-slate-500" />
-                </div>
-                
-                <div className="text-center mb-12">
-                    <h2 className="text-5xl md:text-7xl font-bold text-white font-sci-fi tracking-widest text-glow mb-4">SYSTEM STANDBY</h2>
-                    <p className="text-cyan-400 font-mono tracking-[0.5em] text-sm md:text-base uppercase">Awaiting Neural Link Initialization</p>
-                </div>
-
-                {/* Wide Protocol Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full px-4">
-                    {/* Protocol 1 */}
-                    <div className="p-8 border border-white/10 rounded-2xl backdrop-blur-sm relative overflow-hidden group hover:border-cyan-500/30 transition-all duration-500 h-full flex flex-col justify-center items-center text-center">
-                        <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <span className="font-mono text-cyan-400 text-4xl mb-4 opacity-50 font-bold">01</span>
-                        <strong className="text-white block mb-2 text-xl uppercase tracking-widest font-sci-fi">Ingest Data</strong>
-                        <p className="text-slate-400 font-mono text-sm leading-relaxed max-w-xs mx-auto">
-                            Connect via Nexus Bridge protocol to synchronize student records.
-                        </p>
-                    </div>
-
-                    {/* Protocol 2 */}
-                    <div className="p-8 border border-white/10 rounded-2xl backdrop-blur-sm relative overflow-hidden group hover:border-purple-500/30 transition-all duration-500 h-full flex flex-col justify-center items-center text-center">
-                        <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <span className="font-mono text-purple-400 text-4xl mb-4 opacity-50 font-bold">02</span>
-                        <strong className="text-white block mb-2 text-xl uppercase tracking-widest font-sci-fi">Activate Modules</strong>
-                        <p className="text-slate-400 font-mono text-sm leading-relaxed max-w-xs mx-auto">
-                            Initialize Neural Link systems to enable full OS functionality.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-      );
-  }
-
   // Stats Configuration
   const renderStats = () => {
     if (userRole === 'admin' || userRole === 'developer') {
@@ -116,6 +70,46 @@ const Dashboard: React.FC<DashboardProps> = ({ students, insights, userRole, sch
   };
 
   const stats = renderStats();
+
+  const getModules = () => {
+    const common = [];
+    if (userRole === 'admin' || userRole === 'developer') {
+      return [
+        { id: 'students', label: 'Students', icon: Users, color: 'text-indigo-400', desc: 'Manage student records' },
+        { id: 'finance', label: 'Finance', icon: DollarSign, color: 'text-emerald-400', desc: 'Financial oversight' },
+        { id: 'analytics', label: 'Lumen AI', icon: Activity, color: 'text-cyan-400', desc: 'Predictive analytics' },
+        { id: 'nexus', label: 'Nexus Bridge', icon: Database, color: 'text-purple-400', desc: 'Data integration' },
+        { id: 'transport', label: 'Transport', icon: Bus, color: 'text-amber-400', desc: 'Fleet management' },
+        { id: 'library', label: 'Library', icon: Library, color: 'text-rose-400', desc: 'Resource tracking' },
+        { id: 'genesis', label: 'Genesis', icon: Cpu, color: 'text-blue-400', desc: 'Core configuration' },
+        { id: 'agents', label: 'Agent Grid', icon: Signal, color: 'text-orange-400', desc: 'System processes' }
+      ];
+    } else if (userRole === 'teacher') {
+      return [
+        { id: 'academics', label: 'My Classes', icon: BookOpen, color: 'text-indigo-400', desc: 'Manage your classes' },
+        { id: 'students', label: 'Students', icon: Users, color: 'text-purple-400', desc: 'Student performance' },
+        { id: 'library', label: 'Library', icon: Library, color: 'text-rose-400', desc: 'Academic resources' },
+        { id: 'assistant', label: 'AI Copilot', icon: Zap, color: 'text-cyan-400', desc: 'Teacher AI tools' }
+      ];
+    } else if (userRole === 'student') {
+      return [
+        { id: 'ai-tutor', label: 'AI Tutor', icon: Brain, color: 'text-purple-400', desc: 'Personal learning' },
+        { id: 'academics', label: 'Schedule', icon: Clock, color: 'text-cyan-400', desc: 'Class timetable' },
+        { id: 'assignments', label: 'Tasks', icon: BookOpen, color: 'text-amber-400', desc: 'Assignments' },
+        { id: 'library', label: 'Library', icon: Library, color: 'text-rose-400', desc: 'Digital library' }
+      ];
+    } else if (userRole === 'parent') {
+      return [
+        { id: 'ai-guardian', label: 'AI Guardian', icon: Shield, color: 'text-indigo-400', desc: 'Student safety' },
+        { id: 'students', label: 'Children', icon: Users, color: 'text-purple-400', desc: 'Academic progress' },
+        { id: 'finance', label: 'Invoices', icon: DollarSign, color: 'text-emerald-400', desc: 'Fee payments' },
+        { id: 'transport', label: 'Transport', icon: Bus, color: 'text-amber-400', desc: 'Bus tracking' }
+      ];
+    }
+    return common;
+  };
+
+  const modules = getModules();
 
   return (
     <div className="space-y-8 animate-in fade-in duration-1000">
@@ -183,6 +177,44 @@ const Dashboard: React.FC<DashboardProps> = ({ students, insights, userRole, sch
             </div>
           </div>
         ))}
+      </div>
+
+      {/* System Modules Grid */}
+      <div className="space-y-4">
+          <div className="flex items-center gap-3">
+              <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
+              <h3 className="text-[10px] font-mono text-slate-500 uppercase tracking-[0.5em]">System Modules</h3>
+              <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {modules.map((mod) => (
+                  <button
+                      key={mod.id}
+                      onClick={() => onNavigate?.(mod.id)}
+                      className="group relative p-4 rounded-2xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/20 transition-all duration-300 flex flex-col items-center text-center gap-3 overflow-hidden"
+                  >
+                      {/* Hover Glow */}
+                      <div className="absolute inset-0 bg-gradient-to-b from-white/[0.05] to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                      
+                      <div className={`p-3 rounded-xl bg-white/5 border border-white/10 group-hover:scale-110 transition-all duration-500 ${mod.color}`}>
+                          <mod.icon size={20} />
+                      </div>
+                      
+                      <div>
+                          <div className="text-xs font-bold text-white font-sci-fi tracking-wider group-hover:text-cyan-400 transition-colors uppercase">{mod.label}</div>
+                          <div className="text-[9px] text-slate-500 font-mono mt-1 opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0">
+                              {mod.desc}
+                          </div>
+                      </div>
+                      
+                      {/* Animated Corner */}
+                      <div className="absolute top-0 right-0 w-8 h-8 pointer-events-none">
+                          <div className="absolute top-2 right-2 w-1 h-1 bg-white/20 rounded-full group-hover:bg-cyan-500 transition-colors"></div>
+                      </div>
+                  </button>
+              ))}
+          </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

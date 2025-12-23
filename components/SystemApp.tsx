@@ -70,7 +70,7 @@ const SystemApp: React.FC = () => {
 
   const subscriptionValue = (subscriptionStatus || '').toLowerCase().trim();
   const nonPaidValues = new Set(['', 'demo', 'free', 'visitor', 'expired', 'inactive', 'trial']);
-  const isDemoUser = nonPaidValues.has(subscriptionValue);
+  const isDemoUser = nonPaidValues.has(subscriptionValue) || userRole === 'demo';
 
   // Authentication & initial user
   useEffect(() => {
@@ -127,25 +127,32 @@ const SystemApp: React.FC = () => {
 
     const initSystem = async () => {
       if (isDemoUser) {
-        addLog(AgentName.NOVA, "Initializing Demo Mode Environment...", "processing");
-        setStudents(MOCK_STUDENTS);
-        setFees(MOCK_FEES);
-        setTransport(MOCK_TRANSPORT);
-        setLibrary(MOCK_LIBRARY);
-        addLog(AgentName.LUMIX, "Demo environment loaded successfully.", "success");
-        return;
-      }
-
-      // Paid users: API fetch
-      try {
-        const health = await api.checkHealth();
-        if (health.status !== 'LumiX Core Online') {
-          addLog(AgentName.NOVA, "Core Network Offline. System Standby.", "warning");
+          addLog(AgentName.NOVA, "Initializing Demo Mode Environment...", "processing");
+          setStudents(MOCK_STUDENTS);
+          setFees(MOCK_FEES);
+          setTransport(MOCK_TRANSPORT);
+          setLibrary(MOCK_LIBRARY);
+          addLog(AgentName.LUMIX, "Demo environment loaded successfully.", "success");
           return;
         }
-        addLog(AgentName.NOVA, "Secure uplink to Core Server established.", "success");
 
-        let studentsForInsights: Student[] = [];
+        // Paid users: API fetch
+        try {
+          const health = await api.checkHealth();
+          if (health.status !== 'LumiX Core Online') {
+            addLog(AgentName.NOVA, `Core Network Offline [Status: ${health.status}]. System Standby.`, "warning");
+            return;
+          }
+          addLog(AgentName.NOVA, "Secure uplink to Core Server established.", "success");
+
+          // Fetch School Config First
+          const config = await api.getSchoolConfig();
+          if (config) {
+            setSchoolConfig(config);
+            addLog(AgentName.NOVA, `Branding Identity [${config.name}] Loaded.`, "success");
+          }
+
+          let studentsForInsights: Student[] = [];
 
         if (userRole === 'student') {
           const [selfStudent, dbTransport, dbLibrary] = await Promise.all([
@@ -280,7 +287,7 @@ const SystemApp: React.FC = () => {
   const renderContent = () => {
     switch (currentView) {
       case 'dashboard':
-        return <Dashboard students={students} insights={insights} userRole={userRole} schoolName={schoolConfig?.name} />;
+        return <Dashboard students={students} insights={insights} userRole={userRole} schoolName={schoolConfig?.name} onNavigate={setCurrentView} />;
       case 'students':
         return <StudentManager students={students} onAddStudent={handleAddStudent} onDeleteStudent={handleDeleteStudent} onRunAstra={runAstraPrediction} logAgentAction={addLog} />;
       case 'agents':
@@ -352,11 +359,12 @@ const SystemApp: React.FC = () => {
   const isCockpit = cockpitViews.includes(currentView);
 
   return (
-    <div className="flex bg-[#030014] text-slate-200 h-[100dvh] w-[100vw] relative font-sans overflow-hidden">
-      {/* Background Ambience */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-900/20 rounded-full blur-[100px] animate-pulse"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-cyan-900/20 rounded-full blur-[100px]"></div>
+    <div className="flex bg-[#030014] text-slate-200 h-[100dvh] w-[100vw] relative font-sans overflow-hidden selection:bg-cyan-500/30">
+      {/* Background Ambience - Fixed and behind everything */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-900/20 rounded-full blur-[120px] animate-pulse"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-cyan-900/20 rounded-full blur-[120px]"></div>
+        <div className="absolute top-[20%] right-[10%] w-[300px] h-[300px] bg-indigo-900/10 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '4s' }}></div>
       </div>
 
       {accessBlock && (
@@ -396,7 +404,7 @@ const SystemApp: React.FC = () => {
 
       <Sidebar currentView={currentView} onChangeView={setCurrentView} userRole={userRole} schoolConfig={schoolConfig} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
-      <main className={`flex-1 relative z-10 transition-all duration-300 flex flex-col ${isCockpit ? 'h-[100dvh] overflow-hidden' : 'h-[100dvh] overflow-y-auto'} ${isSidebarOpen ? 'blur-sm md:blur-none' : ''} md:ml-72 min-w-0 p-4 md:p-8`}>
+      <main className={`flex-1 relative z-10 transition-all duration-300 flex flex-col ${isCockpit ? 'h-full overflow-hidden' : 'h-full overflow-y-auto overscroll-contain'} ${isSidebarOpen ? 'blur-sm md:blur-none' : ''} md:ml-72 min-w-0 p-4 md:p-8`}>
         {/* Developer God Mode Switcher */}
         {initialRole === 'developer' && (
           <div className="fixed top-4 right-24 z-[60] flex items-center gap-3 bg-purple-900/40 backdrop-blur-md border border-purple-500/30 p-2 rounded-xl">

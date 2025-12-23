@@ -3,8 +3,6 @@ from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
-print(f"DEBUG CONFIG: SECRET_KEY first 5 chars: {os.getenv('SECRET_KEY')[:5] if os.getenv('SECRET_KEY') else 'None'}")
-
 class Settings:
     SECRET_KEY = os.getenv("SECRET_KEY", "development-secret-key-not-for-production")
     ALGORITHM = "HS256"
@@ -17,7 +15,7 @@ class Settings:
         "X-Content-Type-Options": "nosniff",
         "X-XSS-Protection": "1; mode=block",
         "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-        "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net"
+        "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' http://localhost:8000 http://127.0.0.1:8000 http://localhost:3000 http://127.0.0.1:3000 http://localhost:3001 http://127.0.0.1:3001 https://*.vercel.app; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net"
     }
     RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "10"))
     RATE_LIMIT_STORAGE_URI = os.getenv("RATE_LIMIT_STORAGE_URI", "memory://")

@@ -26,10 +26,21 @@ if "sqlite" in SQLALCHEMY_DATABASE_URL:
     except OSError:
         pass
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, 
-    connect_args={"check_same_thread": False} if "sqlite" in SQLALCHEMY_DATABASE_URL else {}
-)
+engine_args = {
+    "connect_args": {"check_same_thread": False} if "sqlite" in SQLALCHEMY_DATABASE_URL else {}
+}
+
+# Production settings for PostgreSQL
+if "postgresql" in SQLALCHEMY_DATABASE_URL:
+    engine_args.update({
+        "pool_size": 20,
+        "max_overflow": 10,
+        "pool_timeout": 30,
+        "pool_recycle": 1800,
+        "pool_pre_ping": True,
+    })
+
+engine = create_engine(SQLALCHEMY_DATABASE_URL, **engine_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()

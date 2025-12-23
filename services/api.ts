@@ -1,5 +1,5 @@
 
-import { Student, FeeRecord, TransportRoute, LibraryBook, ClassSession, Assignment } from '../types';
+import { Student, FeeRecord, TransportRoute, LibraryBook, ClassSession, Assignment, SchoolConfig } from '../types';
 import { authService } from './auth';
 
 // In production, this comes from the build environment. In dev, it falls back to localhost.
@@ -69,12 +69,61 @@ export const api = {
   // Check System Status
   checkHealth: async () => {
     try {
+      console.log(`[LUMIX] Checking health at ${API_URL}/`);
       const res = await fetch(`${API_URL}/`);
-      return await res.json();
+      const data = await res.json();
+      console.log(`[LUMIX] Health check response:`, data);
+      return data;
     } catch (e) {
-      console.warn("Backend unavailable, running in offline simulation mode.");
+      console.error("[LUMIX] Health check failed:", e);
       return { status: "OFFLINE" };
     }
+  },
+
+  // --- SCHOOL CONFIG ---
+  getSchoolConfig: async (): Promise<SchoolConfig | null> => {
+    try {
+      const res = await fetch(`${API_URL}/school/config`, { headers: getHeaders() });
+      if (!res.ok) await throwHttpError(res);
+      const data = await res.json();
+      return {
+        name: data.name,
+        motto: data.motto,
+        primaryColor: data.primary_color,
+        secondaryColor: data.secondary_color,
+        logoUrl: data.logo_url,
+        websiteContext: data.website_context,
+        isConfigured: true,
+        modules: data.modules_json ? JSON.parse(data.modules_json) : { transport: true, library: true, finance: true, nexus: true },
+        systemSettings: {
+          securityLevel: data.security_level as 'standard' | 'high' | 'fortress',
+          aiCreativity: data.ai_creativity
+        }
+      };
+    } catch (e) { return null; }
+  },
+
+  updateSchoolConfig: async (config: SchoolConfig): Promise<boolean> => {
+    try {
+      const payload = {
+        name: config.name,
+        motto: config.motto,
+        primary_color: config.primaryColor,
+        secondary_color: config.secondaryColor,
+        logo_url: config.logoUrl,
+        website_context: config.websiteContext,
+        modules_json: JSON.stringify(config.modules),
+        security_level: config.systemSettings?.securityLevel,
+        ai_creativity: config.systemSettings?.aiCreativity
+      };
+      const res = await fetch(`${API_URL}/school/config`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) await throwHttpError(res);
+      return true;
+    } catch (e) { return false; }
   },
 
   // --- STUDENTS ---
@@ -152,12 +201,12 @@ export const api = {
     return await res.json();
   },
 
-  sendLandingChat: async (prompt: string, history: { role: string, content: string }[] = []) => {
+  sendLandingChat: async (prompt: string, history: { role: string, content: string }[] = [], language: string = 'en') => {
       try {
           const res = await fetch(`${API_URL}/ai/landing-chat`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ prompt, history })
+              body: JSON.stringify({ prompt, history, language })
           });
           const data = await res.json();
           if (!res.ok) {
@@ -234,6 +283,21 @@ export const api = {
     const formData = new FormData();
     formData.append('file', file);
     const res = await fetch(`${API_URL}/assignments/upload`, {
+        method: 'POST',
+        headers: getHeaders(true),
+        body: formData
+    });
+    if (!res.ok) {
+      await throwHttpError(res);
+    }
+    return await res.json();
+  },
+
+  gradeAssignment: async (file: File, context: string = "") => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('context', context);
+    const res = await fetch(`${API_URL}/ai/grade`, {
         method: 'POST',
         headers: getHeaders(true),
         body: formData

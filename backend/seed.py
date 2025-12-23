@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from .database import SessionLocal, engine
-from . import models
+from . import models, auth
 import random
 import uuid
 import hashlib
@@ -24,16 +24,24 @@ def seed_data():
 
     print("🌱 Seeding Database...")
 
-    # 2. Seed Users (for Login) with PBKDF2-SHA256 hashes (password: lumix123)
-    def hash_pw(pw: str) -> str:
-        salt = secrets.token_bytes(16).hex()
-        dk = hashlib.pbkdf2_hmac('sha256', pw.encode('utf-8'), bytes.fromhex(salt), 100_000)
-        return f"{salt}:{dk.hex()}"
+    # 2. School Config
+    school = models.SchoolConfig(
+        school_id="default",
+        name="LumiX Academy",
+        motto="Inspired Learning. Bold Futures.",
+        primary_color="#06b6d4",
+        secondary_color="#6366f1",
+        security_level="standard",
+        ai_creativity=50,
+        ai_enabled=True
+    )
+    db.merge(school)
 
+    # 3. Seed Users (for Login) (password: lumix123)
     users = [
         models.User(
             username="admin",
-            password_hash=hash_pw("lumix123"),
+            password_hash=auth.get_password_hash("lumix123"),
             full_name="Principal Johnson",
             role="admin",
             school_id="default",
@@ -43,7 +51,7 @@ def seed_data():
         ),
         models.User(
             username="teacher",
-            password_hash=hash_pw("lumix123"),
+            password_hash=auth.get_password_hash("lumix123"),
             full_name="Ms. Sarah Johnson",
             role="teacher",
             school_id="default",
@@ -53,7 +61,7 @@ def seed_data():
         ),
         models.User(
             username="student",
-            password_hash=hash_pw("lumix123"),
+            password_hash=auth.get_password_hash("lumix123"),
             full_name="Ali Rahman",
             role="student",
             school_id="default",
@@ -63,7 +71,7 @@ def seed_data():
         ),
         models.User(
             username="parent",
-            password_hash=hash_pw("lumix123"),
+            password_hash=auth.get_password_hash("lumix123"),
             full_name="Dr. Ahmed Rahman",
             role="parent",
             school_id="default",
@@ -108,7 +116,7 @@ def seed_data():
     ]
     db.add_all(profiles)
 
-    # 3. Seed Students
+    # 4. Seed Students
     student_names = [
         "Ali Rahman", "Zara Sheikh", "Bilal Ahmed", "Ayesha Khan", "Omar Farooq", 
         "Fatima Ali", "Hassan Raza", "Zainab Malik", "Usman Siddiqui", "Saad Ansari",
@@ -142,7 +150,7 @@ def seed_data():
         students.append(student)
     db.add_all(students)
 
-    # 4. Seed Fees
+    # 5. Seed Fees
     fees = []
     for s in students:
         fees.append(models.FeeRecord(
@@ -156,7 +164,7 @@ def seed_data():
         ))
     db.add_all(fees)
 
-    # 5. Seed Transport
+    # 6. Seed Transport
     routes = [
         models.TransportRoute(id="t1", route_name="Route A (Downtown)", driver_name="Mike", status="Active", fuel_level=85, license_plate="LMX-101"),
         models.TransportRoute(id="t2", route_name="Route B (Suburbs)", driver_name="Joe", status="Active", fuel_level=40, license_plate="LMX-102"),
@@ -165,7 +173,7 @@ def seed_data():
     ]
     db.add_all(routes)
 
-    # 6. Seed Library
+    # 7. Seed Library
     books = [
         models.LibraryBook(id="l1", title="Dune", author="Frank Herbert", category="Sci-Fi", status="Available"),
         models.LibraryBook(id="l2", title="Physics 101", author="Prof. X", category="Education", status="Checked Out"),

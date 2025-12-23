@@ -10,17 +10,19 @@ interface SidebarProps {
   schoolConfig?: SchoolConfig | null;
   isOpen: boolean;
   onClose: () => void;
+  isDemo?: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, userRole, schoolConfig, isOpen, onClose }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, userRole, schoolConfig, isOpen, onClose, isDemo }) => {
   
   const getMenuItems = () => {
+    let items = [];
     const common = [
         { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
     ];
 
     if (userRole === 'admin' || userRole === 'developer') {
-        return [
+        items = [
             ...common,
             { id: 'students', label: 'Students', icon: <Users size={20} /> },
             { id: 'genesis', label: 'Genesis Engine', icon: <Cpu size={20} /> },
@@ -34,7 +36,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, userRole, 
             { id: 'system-config', label: 'System Config', icon: <Settings size={20} /> },
         ];
     } else if (userRole === 'teacher') {
-        return [
+        items = [
             ...common,
             { id: 'academics', label: 'My Classes', icon: <BookOpen size={20} /> },
             { id: 'genesis', label: 'Genesis Engine', icon: <Cpu size={20} /> },
@@ -43,7 +45,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, userRole, 
             { id: 'assistant', label: 'AI Copilot', icon: <Cpu size={20} /> },
         ];
     } else if (userRole === 'student') {
-        return [
+        items = [
             ...common,
             { id: 'ai-tutor', label: 'AI Tutor', icon: <Brain size={20} /> },
             { id: 'academics', label: 'My Schedule', icon: <Calendar size={20} /> },
@@ -52,7 +54,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, userRole, 
             { id: 'finance', label: 'Fee Status', icon: <DollarSign size={20} /> },
         ];
     } else if (userRole === 'parent') {
-        return [
+        items = [
             ...common,
             { id: 'ai-guardian', label: 'AI Guardian', icon: <Shield size={20} /> },
             { id: 'students', label: 'My Children', icon: <Users size={20} /> },
@@ -60,8 +62,35 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, userRole, 
             { id: 'transport', label: 'Transport', icon: <Bus size={20} /> },
             { id: 'dashboard', label: 'Notices', icon: <Bell size={20} /> },
         ];
+    } else {
+        items = common;
     }
-    return common;
+
+    // Restrict based on school configuration modules
+    if (schoolConfig?.modules) {
+        const moduleMapping: Record<string, keyof typeof schoolConfig.modules> = {
+            'transport': 'transport',
+            'library': 'library',
+            'finance': 'finance',
+            'nexus': 'nexus'
+        };
+
+        items = items.filter(item => {
+            const moduleKey = moduleMapping[item.id];
+            if (moduleKey) {
+                return schoolConfig.modules[moduleKey] !== false;
+            }
+            return true;
+        });
+    }
+
+    // Restrict premium/admin features in Demo Mode
+    if (isDemo) {
+        const restrictedIds = ['genesis', 'nexus', 'agents', 'system-config', 'analytics'];
+        return items.filter(item => !restrictedIds.includes(item.id));
+    }
+
+    return items;
   };
 
   const menuItems = getMenuItems();
@@ -98,26 +127,38 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, userRole, 
           
           <div className="flex items-center justify-between relative z-10">
             <div className="flex items-center gap-4">
-              <div className="relative group-hover:scale-105 transition-transform duration-500">
+              <div className="relative group/logo">
                 <div 
-                    className="w-12 h-12 rounded-xl flex items-center justify-center backdrop-blur-md border border-white/20 shadow-[0_0_20px_rgba(255,255,255,0.1)] transition-colors duration-500"
-                    style={{ 
+                    className={`w-12 h-12 rounded-xl flex items-center justify-center backdrop-blur-md border transition-all duration-500 shadow-lg ${isDemo ? 'bg-amber-500/20 border-amber-500/50 shadow-amber-500/20' : 'border-white/20 shadow-[0_0_20px_rgba(255,255,255,0.1)]'}`}
+                    style={!isDemo ? { 
                         backgroundColor: `${brandColor}22`, 
                         color: brandColor,
-                        borderColor: `${brandColor}44`
-                    }}
+                        borderColor: `${brandColor}44`,
+                        boxShadow: `0 0 15px ${brandColor}33`
+                    } : { color: '#f59e0b' }}
                 >
-                   {userRole === 'student' ? <GraduationCap size={24} /> : <School size={24} />}
+                   {isDemo ? (
+                     <Shield size={24} />
+                   ) : schoolConfig?.logoUrl ? (
+                     <img src={schoolConfig.logoUrl} alt="Logo" className="w-full h-full object-contain rounded-lg" />
+                   ) : userRole === 'student' ? (
+                     <GraduationCap size={24} />
+                   ) : (
+                     <School size={24} />
+                   )}
                 </div>
+                {/* Logo Glow */}
+                <div className={`absolute -inset-2 rounded-full blur-xl opacity-0 group-hover/logo:opacity-40 transition-opacity duration-700 ${isDemo ? 'bg-amber-500' : ''}`} style={!isDemo ? { backgroundColor: brandColor } : {}} />
                 {/* Online Indicator */}
-                <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-emerald-500 border-2 border-black rounded-full animate-pulse shadow-[0_0_10px_#10b981]"></div>
+                <div className={`absolute -bottom-1 -right-1 w-3 h-3 border-2 border-black rounded-full animate-pulse shadow-[0_0_10px_#10b981] ${isDemo ? 'bg-amber-500 shadow-amber-500/50' : 'bg-emerald-500'}`}></div>
               </div>
+              
               <div className="overflow-hidden">
-                 <h1 className="text-xl font-bold tracking-tight text-white font-sci-fi drop-shadow-[0_0_10px_rgba(255,255,255,0.5)] whitespace-nowrap overflow-hidden text-ellipsis max-w-[140px]">
+                 <h1 className={`text-xl font-bold tracking-tight font-sci-fi transition-colors duration-500 truncate max-w-[140px] ${isDemo ? 'text-amber-500 drop-shadow-[0_0_10px_rgba(245,158,11,0.5)]' : 'text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]'}`}>
                      {brandName}
                  </h1>
-                 <p className="text-[9px] text-slate-400 tracking-[0.2em] uppercase font-mono truncate max-w-[140px] opacity-70">
-                    {userRole === 'admin' && !schoolConfig?.isConfigured ? 'GOD MODE' : brandMotto}
+                 <p className={`text-[9px] tracking-[0.2em] uppercase font-mono truncate max-w-[140px] opacity-70 ${isDemo ? 'text-amber-500/80' : 'text-slate-400'}`}>
+                    {isDemo ? 'DEMO ENVIRONMENT' : (userRole === 'admin' && !schoolConfig?.isConfigured ? 'GOD MODE' : brandMotto)}
                  </p>
               </div>
             </div>

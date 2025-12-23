@@ -51,36 +51,71 @@ const DemoHandler = () => {
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     const user = authService.getUser();
-    if (!user.token) {
+    const isAuthenticated = !!(user.token && user.token !== 'null' && user.token !== 'undefined' && user.token.length > 0);
+    
+    if (!isAuthenticated) {
         return <Navigate to="/login" replace />;
     }
+    
+    const subscription = (user.subscription || '').toLowerCase().trim();
+    const role = (user.role || '').toLowerCase().trim();
+    const isPaid = ['active', 'enterprise', 'pro', 'basic', 'demo'].includes(subscription);
+    const isDev = ['developer', 'owner', 'admin'].includes(role) || role === 'demo';
+    
+    if (!isPaid && !isDev) {
+        // If authenticated but not paid, redirect to login which will show Access Denied
+        return <Navigate to="/login" replace />;
+    }
+    
     return <>{children}</>;
 };
 
 // Wrapper for LandingPage to handle internal navigation if needed
 const LandingPageWrapper = () => {
     const navigate = useNavigate();
-    // If user is already authenticated, redirect to app?
-    // Uncomment below if we want auto-redirect for logged in users
-    /*
     const user = authService.getUser();
-    if (user.token) {
-        return <Navigate to="/app" />;
-    }
-    */
     
-    // We pass empty onNavigateLogin because we are now using Link or useNavigate inside LandingPage, 
-    // but for backward compatibility with the prop interface:
+    // Auto-redirect if already logged in and visiting landing? 
+    // This provides a smoother experience for authenticated users
+    React.useEffect(() => {
+        if (user.token) {
+            const subscription = (user.subscription || '').toLowerCase().trim();
+            const role = (user.role || '').toLowerCase().trim();
+            const isPaid = ['active', 'enterprise', 'pro', 'basic', 'demo'].includes(subscription);
+            const isDev = ['developer', 'owner', 'admin'].includes(role) || role === 'demo';
+            
+            if (isPaid || isDev) {
+                // We could auto-redirect here, but let's keep it to handleSystemLogin for now
+                // to allow users to see the landing page if they want.
+            }
+        }
+    }, [user.token, user.subscription, user.role, navigate]);
+    
     return <LandingPage onNavigateLogin={() => navigate('/login')} />;
 };
 
 // Wrapper for LoginView
 const LoginViewWrapper = () => {
     const navigate = useNavigate();
-    const handleLoginSuccess = (role: string, name: string) => {
-        navigate('/app');
-    };
-    return <LoginView onLoginSuccess={handleLoginSuccess} onBack={() => navigate('/')} />;
+    const user = authService.getUser();
+
+    React.useEffect(() => {
+        const token = user.token;
+        const isValidToken = token && token !== 'null' && token !== 'undefined' && token.length > 0;
+
+        if (isValidToken) {
+            const subscription = (user.subscription || '').toLowerCase().trim();
+            const role = (user.role || '').toLowerCase().trim();
+            const isPaid = ['active', 'enterprise', 'pro', 'basic', 'demo'].includes(subscription);
+            const isDev = ['developer', 'owner', 'admin'].includes(role) || role === 'demo';
+            
+            if (isPaid || isDev) {
+                navigate('/app', { replace: true });
+            }
+        }
+    }, [user.token, user.subscription, user.role, navigate]);
+    
+    return <LoginView onLoginSuccess={(role, name) => navigate('/app')} onBack={() => navigate('/')} />;
 };
 
 const App: React.FC = () => {

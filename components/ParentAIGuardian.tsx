@@ -127,7 +127,7 @@ const ParentAIGuardian: React.FC = () => {
                     {loading && <span className="text-xs font-mono text-emerald-400 animate-pulse">AI PROCESSING...</span>}
                 </div>
                 
-                <div className="p-8 bg-slate-900/50 min-h-[200px]">
+                <div className="p-8 bg-slate-900/50 min-h-[200px] max-h-[600px] overflow-y-auto custom-scrollbar">
                     {loading ? (
                         <div className="flex flex-col items-center justify-center h-32 space-y-3">
                             <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
@@ -174,7 +174,7 @@ const ParentAIGuardian: React.FC = () => {
 
                                 <div className="relative">
                                     <textarea 
-                                        className="w-full h-64 bg-black/20 border border-white/10 rounded-xl p-4 text-slate-300 font-mono text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none resize-none"
+                                        className="w-full h-64 bg-black/20 border border-white/10 rounded-xl p-4 text-slate-300 font-mono text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none resize-none overflow-y-auto custom-scrollbar pr-2"
                                         value={emailDraft}
                                         onChange={(e) => setEmailDraft(e.target.value)}
                                         placeholder="AI generated draft will appear here..."

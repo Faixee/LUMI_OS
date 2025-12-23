@@ -114,7 +114,16 @@ export const authService = {
         const role = localStorage.getItem('lumix_role') || sessionStorage.getItem('lumix_role');
         const name = localStorage.getItem('lumix_user') || sessionStorage.getItem('lumix_user');
         const subscription = localStorage.getItem('lumix_subscription') || sessionStorage.getItem('lumix_subscription');
-        return { token, role, name, subscription };
+        
+        // Clean up stringified nulls/undefineds
+        const cleanToken = (token === 'null' || token === 'undefined') ? null : token;
+        
+        return { token: cleanToken, role, name, subscription };
+    },
+
+    isAuthenticated: () => {
+        const user = authService.getUser();
+        return !!(user.token && user.token.length > 0);
     },
 
     saveUser: (token: string, role: string, name: string, subscription: string, useSession: boolean = false) => {

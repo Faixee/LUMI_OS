@@ -65,9 +65,23 @@ class PaymentEvent(Base):
 class SchoolConfig(Base):
     __tablename__ = "school_config"
     school_id = Column(String, primary_key=True, index=True)
+    name = Column(String, nullable=True)
+    motto = Column(String, nullable=True)
+    primary_color = Column(String, nullable=True)
+    secondary_color = Column(String, nullable=True)
+    logo_url = Column(Text, nullable=True)
+    website_context = Column(Text, nullable=True)
+    
+    # Module Toggles (JSON string or separate columns)
+    modules_json = Column(Text, nullable=True) # {"transport": true, ...}
+    
+    # System Settings
+    security_level = Column(String, default="standard")
+    ai_creativity = Column(Integer, default=50)
+    
     ai_enabled = Column(Boolean, default=True)
     ai_disabled_reason = Column(String, nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class AIRequestLog(Base):

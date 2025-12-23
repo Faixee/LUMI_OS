@@ -701,35 +701,39 @@ export const analyzeSchoolUrl = async (url: string): Promise<SchoolConfig> => {
             systemSettings: { securityLevel: 'standard', aiCreativity: 50 }
         };
     }
-    const hostname = (() => { try { return new URL(url).hostname; } catch { return url; } })();
-    const derivedName = hostname.split('.').slice(0, 1)[0].replace(/[-_]/g, ' ');
+    
     try {
-        const res = await request('/ai/chat', {
-            prompt: `Analyze the school website at ${url} and synthesize a brand identity (name, motto, primary color in hex, and a short website context). Return a concise summary.`,
-            role: 'admin',
-            context: 'Provide only a short summary; do not include secrets.'
-        });
+        const res = await request('/ai/analyze-url', { url });
+        
         if (!res.ok) {
             if (res.status === 401 || res.status === 403) await throwAuthOrPaywall(res);
-            throw new Error(`AI request failed: /ai/chat (${res.status})`);
+            throw new Error(`AI request failed: /ai/analyze-url (${res.status})`);
         }
-        const data = await res.json();
+        
+        const brandData = await res.json();
+        
         return {
-            name: derivedName ? derivedName.charAt(0).toUpperCase() + derivedName.slice(1) : 'School',
-            motto: 'Inspired Learning. Bold Futures.',
-            primaryColor: '#06b6d4',
+            name: brandData.name || 'School',
+            motto: brandData.motto || 'Inspired Learning. Bold Futures.',
+            primaryColor: brandData.primaryColor || '#06b6d4',
+            secondaryColor: brandData.secondaryColor || '#6366f1',
+            logoUrl: brandData.logoUrl,
             isConfigured: true,
-            websiteContext: data.response,
+            websiteContext: brandData.websiteContext,
             modules: { transport: true, library: true, finance: true, nexus: true },
             systemSettings: { securityLevel: 'standard', aiCreativity: 50 }
         };
-    } catch {
+    } catch (err) {
+        console.error("URL Analysis Error:", err);
+        const hostname = (() => { try { return new URL(url).hostname; } catch { return url; } })();
+        const derivedName = hostname.split('.').slice(0, 1)[0].replace(/[-_]/g, ' ');
         return {
             name: derivedName ? derivedName.charAt(0).toUpperCase() + derivedName.slice(1) : 'School',
             motto: 'Inspired Learning. Bold Futures.',
             primaryColor: '#06b6d4',
+            secondaryColor: '#6366f1',
             isConfigured: true,
-            websiteContext: `AI is temporarily unavailable. Using a default profile for ${hostname}.`,
+            websiteContext: `AI Analysis failed for ${hostname}. Using default heuristics.`,
             modules: { transport: true, library: true, finance: true, nexus: true },
             systemSettings: { securityLevel: 'standard', aiCreativity: 50 }
         };

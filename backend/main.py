@@ -14,10 +14,24 @@ import io
 import time
 import json
 import re
+import httpx
+import logging
+from .config import settings
+from pythonjsonlogger import jsonlogger
+
+# --- LOGGING CONFIGURATION ---
+logger = logging.getLogger("lumios")
+log_handler = logging.StreamHandler()
+formatter = jsonlogger.JsonFormatter(
+    '%(asctime)s %(levelname)s %(name)s %(message)s %(request_id)s %(method)s %(path)s %(status_code)s %(duration_ms)s'
+)
+log_handler.setFormatter(formatter)
+logger.addHandler(log_handler)
+logger.setLevel(logging.INFO if settings.ENVIRONMENT == "production" else logging.DEBUG)
+
 from . import models, schemas, database, auth
 from .ai_service import ai_service
 
-from backend.config import settings
 from backend.security import add_security_headers, validate_request_size, validate_csrf_token, sanitize_input, validate_email, validate_password_strength, validate_username
 import hashlib
 import secrets
@@ -33,10 +47,38 @@ except Exception:
 from jose import jwt, JWTError
 
 
-# ----------------------------
-# APP + RATE LIMITER
-# ----------------------------
 app = FastAPI(title="LumiX Core API")
+
+
+@app.get("/")
+async def root():
+    return {"status": "LumiX Core Online", "version": "1.0.0", "system": "LumiX Core"}
+
+@app.get("/health")
+async def health():
+    return {"status": "LumiX Core Online", "version": "1.0.0"}
+
+# ----------------------------
+# WEBRTC SIGNALING
+# ----------------------------
+@app.post("/ai/voice-signal")
+async def voice_signal(req: Dict[str, Any], request: Request):
+    """
+    Signaling endpoint for WebRTC voice link.
+    In a full implementation, this would handle ICE candidates and offers/answers.
+    """
+    signal_type = req.get("type")
+    if signal_type == "offer":
+        # Simulate an answer from NOVA
+        return {
+            "type": "answer",
+            "sdp": "v=0\r\no=- 421634512341234123 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=fingerprint:sha-256 ...",
+            "text": "Neural link established. I'm listening."
+        }
+    elif signal_type == "candidate":
+        return {"status": "candidate_received"}
+    
+    return {"status": "ok"}
 
 # FIX: allow OPTIONS requests (CORS preflight) WITHOUT RATE LIMIT
 limiter = Limiter(key_func=get_remote_address, storage_uri=getattr(settings, "RATE_LIMIT_STORAGE_URI", "memory://"))
@@ -63,10 +105,42 @@ async def audit_middleware(request: Request, call_next):
 
     try:
         response = await call_next(request)
+        duration_ms = int((time.time() - started) * 1000)
+        
+        # Structured logging
+        logger.info(
+            "Request processed",
+            extra={
+                "request_id": request_id,
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": response.status_code,
+                "duration_ms": duration_ms,
+                "ip": get_remote_address(request)
+            }
+        )
         return response
+    except Exception as e:
+        duration_ms = int((time.time() - started) * 1000)
+        logger.error(
+            "Request failed",
+            extra={
+                "request_id": request_id,
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": 500,
+                "duration_ms": duration_ms,
+                "error": str(e)
+            }
+        )
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal Server Error", "request_id": request_id}
+        )
     finally:
+        # Save to AuditLog (optional for every request, but kept here as per original)
         try:
-            status_code = getattr(response, "status_code", None)
+            status_code = getattr(response, "status_code", 500)
             auth_header = request.headers.get("authorization") or ""
 
             user_id = None
@@ -196,6 +270,20 @@ try:
                 "audit_logs": {
                     "school_id": "ALTER TABLE audit_logs ADD COLUMN school_id VARCHAR",
                 },
+                "school_config": {
+                    "name": "ALTER TABLE school_config ADD COLUMN name VARCHAR",
+                    "motto": "ALTER TABLE school_config ADD COLUMN motto VARCHAR",
+                    "primary_color": "ALTER TABLE school_config ADD COLUMN primary_color VARCHAR",
+                    "secondary_color": "ALTER TABLE school_config ADD COLUMN secondary_color VARCHAR",
+                    "logo_url": "ALTER TABLE school_config ADD COLUMN logo_url TEXT",
+                    "website_context": "ALTER TABLE school_config ADD COLUMN website_context TEXT",
+                    "modules_json": "ALTER TABLE school_config ADD COLUMN modules_json TEXT",
+                    "security_level": "ALTER TABLE school_config ADD COLUMN security_level VARCHAR DEFAULT 'standard'",
+                    "ai_creativity": "ALTER TABLE school_config ADD COLUMN ai_creativity INTEGER DEFAULT 50",
+                    "ai_enabled": "ALTER TABLE school_config ADD COLUMN ai_enabled BOOLEAN DEFAULT 1",
+                    "ai_disabled_reason": "ALTER TABLE school_config ADD COLUMN ai_disabled_reason VARCHAR",
+                    "updated_at": "ALTER TABLE school_config ADD COLUMN updated_at DATETIME",
+                },
             }
 
             for table, migrations in table_migrations.items():
@@ -253,14 +341,14 @@ openai_client = None
 if settings.OPENAI_API_KEY and OpenAI:
     try:
         openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
-        print("AI System: OpenAI Client initialized successfully.")
+        logger.info("AI System: OpenAI Client initialized successfully.")
     except Exception as e:
-        print(f"AI System: Failed to initialize OpenAI: {e}")
+        logger.error(f"AI System: Failed to initialize OpenAI: {e}")
         openai_client = None
 elif not settings.OPENAI_API_KEY:
-    print("AI System: OPENAI_API_KEY missing from environment.")
+    logger.warning("AI System: OPENAI_API_KEY missing from environment.")
 elif not OpenAI:
-    print("AI System: openai package not found.")
+    logger.warning("AI System: openai package not found.")
 
 # ----------------------------
 # UTILS
@@ -271,21 +359,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
-
-def verify_password(plain: str, stored: str) -> bool:
-    try:
-        salt_hex, hash_hex = stored.split(":")
-        dk = hashlib.pbkdf2_hmac('sha256', plain.encode('utf-8'), bytes.fromhex(salt_hex), 100_000)
-        return dk.hex() == hash_hex
-    except Exception:
-        return False
-
-
-def get_password_hash(password: str) -> str:
-    salt = secrets.token_bytes(16).hex()
-    dk = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), bytes.fromhex(salt), 100_000)
-    return f"{salt}:{dk.hex()}"
 
 
 def normalize_school_id(raw: Optional[str]) -> str:
@@ -302,16 +375,9 @@ def normalize_school_id(raw: Optional[str]) -> str:
 # ROUTES
 # ----------------------------
 
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    print(f"DEBUG: Request {request.method} {request.url.path}")
-    response = await call_next(request)
-    print(f"DEBUG: Response status {response.status_code}")
-    return response
-
-@app.get("/")
-def health_check():
-    return {"status": "LumiX Core Online", "version": "3.0.1"}
+# @app.get("/")
+# def health_check():
+#     return {"status": "LumiX Core Online", "version": "3.0.1"}
 
 
 # ----------------------------
@@ -359,7 +425,7 @@ def dev_unlock(
     # 1. Check Secret
     expected_secret = settings.INTERNAL_DEV_UNLOCK_SECRET
     if not x_internal_dev_secret or x_internal_dev_secret != expected_secret:
-        print(f"DEBUG: Invalid secret provided: {x_internal_dev_secret}")
+        logger.warning(f"Invalid secret provided for dev unlock")
         raise HTTPException(status_code=403, detail="Invalid internal developer secret")
 
     # 2. Check Email Allowlist
@@ -410,7 +476,7 @@ def register(user: schemas.UserCreate, request: Request, response: Response, db:
         # Create new user
         new_user = models.User(
             username=user.username,
-            password_hash=get_password_hash(user.password),
+            password_hash=auth.get_password_hash(user.password),
             full_name=sanitize_input(user.name),
             role=user.role,
             school_id=school_id,
@@ -503,7 +569,7 @@ def login(creds: schemas.UserLogin, request: Request, response: Response, db: Se
         if profile:
             user = db.query(models.User).filter(models.User.id == profile.user_id).first()
 
-    if not user or not verify_password(creds.password, user.password_hash):
+    if not user or not auth.verify_password(creds.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     is_demo_login = (getattr(user, "subscription_status", "") or "").lower() == "demo" or (getattr(user, "role", "") or "").lower() == "demo"
@@ -793,6 +859,7 @@ allow_library_read = auth.FeatureAccess("library_read")
 allow_nexus_upload = auth.FeatureAccess("nexus_upload", allowed_roles=["admin"])
 allow_ai_chat = auth.FeatureAccess("ai_chat")
 allow_ai_quiz = auth.FeatureAccess("ai_quiz")
+allow_ai_grade = auth.FeatureAccess("ai_grade", allowed_roles=["admin", "teacher"])
 allow_ai_predict = auth.FeatureAccess("ai_predict", allowed_roles=["admin", "teacher"])
 allow_ai_report = auth.FeatureAccess("ai_report", allowed_roles=["parent", "admin"])
 allow_assignments_upload = auth.FeatureAccess("assignments_upload", allowed_roles=["teacher", "admin"])
@@ -1179,6 +1246,186 @@ def _effective_plan(user: models.User) -> str:
     return auth.effective_plan(user)
 
 
+@app.get("/school/config", response_model=schemas.SchoolConfigResponse)
+async def get_school_config(db: Session = Depends(get_db),
+                            current_user: models.User = Depends(auth.get_current_user)):
+    """
+    Returns the branding and configuration for the current school.
+    """
+    school_id = normalize_school_id(getattr(current_user, "school_id", "default"))
+    config = db.query(models.SchoolConfig).filter(models.SchoolConfig.school_id == school_id).first()
+    
+    if not config:
+        # Create default if not exists
+        config = models.SchoolConfig(
+            school_id=school_id,
+            name="LumiX Academy",
+            motto="Inspired Learning. Bold Futures.",
+            primary_color="#06b6d4",
+            secondary_color="#6366f1",
+            security_level="standard",
+            ai_creativity=50,
+            ai_enabled=True
+        )
+        db.add(config)
+        db.commit()
+        db.refresh(config)
+    
+    return config
+
+@app.post("/school/config", response_model=schemas.SchoolConfigResponse)
+async def update_school_config(req: schemas.SchoolConfigUpdate,
+                               db: Session = Depends(get_db),
+                               current_user: models.User = Depends(allow_system_config)):
+    """
+    Updates the school identity matrix and core settings.
+    Requires System Config clearance.
+    """
+    school_id = normalize_school_id(getattr(current_user, "school_id", "default"))
+    config = db.query(models.SchoolConfig).filter(models.SchoolConfig.school_id == school_id).first()
+    
+    if not config:
+        config = models.SchoolConfig(school_id=school_id)
+        db.add(config)
+    
+    # Update fields
+    if req.name is not None: config.name = req.name
+    if req.motto is not None: config.motto = req.motto
+    if req.primary_color is not None: config.primary_color = req.primary_color
+    if req.secondary_color is not None: config.secondary_color = req.secondary_color
+    if req.logo_url is not None: config.logo_url = req.logo_url
+    if req.website_context is not None: config.website_context = req.website_context
+    if req.modules_json is not None: config.modules_json = req.modules_json
+    if req.security_level is not None: config.security_level = req.security_level
+    if req.ai_creativity is not None: config.ai_creativity = req.ai_creativity
+    
+    config.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(config)
+    return config
+
+
+@app.post("/ai/analyze-url")
+@limiter.limit("5/minute")
+async def analyze_url(req: schemas.URLAnalysisRequest, request: Request,
+                    db: Session = Depends(get_db),
+                    current_user: models.User = Depends(allow_system_config)):
+    """
+    Neural Crawler: Analyzes a school website to extract brand identity.
+    Uses Gemini-3-Flash-Preview to perform 'virtual crawling' and synthesis.
+    """
+    started = time.time()
+    school_id = normalize_school_id(getattr(current_user, "school_id", None))
+    
+    log_row = models.AIRequestLog(
+        user_id=getattr(current_user, "id", None),
+        school_id=school_id,
+        role=getattr(current_user, "role", None),
+        plan=_effective_plan(current_user),
+        endpoint=request.url.path,
+        request_type="url_analysis",
+        prompt_redacted=f"URL: {req.url}",
+        success=False,
+    )
+    db.add(log_row)
+    
+    try:
+        if not model:
+            raise HTTPException(status_code=503, detail="AI not configured")
+
+        # REAL CRAWLER: Fetch the website content
+        site_content = ""
+        try:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                }
+                response = await client.get(req.url, headers=headers)
+                if response.status_code == 200:
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(response.text, "html.parser")
+                    
+                    # Remove noise
+                    for element in soup(["script", "style", "nav", "footer", "iframe", "noscript"]):
+                        element.decompose()
+                        
+                    # Extract cleaned text
+                    site_content = soup.get_text(separator=" ", strip=True)
+                    site_content = re.sub(r'\s+', ' ', site_content)[:10000] # Limit to 10k chars
+        except Exception as crawl_err:
+            print(f"Crawl failed for {req.url}: {crawl_err}")
+            # We continue even if crawl fails, Gemini might still have info in its training data
+
+        site_snippet = f"RAW HTML SNIPPET FROM SITE:\n{site_content}\n" if site_content else "Note: Live crawling was blocked. Use your internal knowledge base if available."
+        prompt = f"""
+        Act as a professional Brand Architect and Web Analyst.
+        Target URL: {req.url}
+        
+        {site_snippet}
+        
+        Analyze the school identity and extract/synthesize the following:
+        1. Official School Name (Clean, formal version)
+        2. School Motto or Tagline (If found in HTML, use it. Otherwise, synthesize a professional one)
+        3. PRIMARY BRAND COLOR (The dominant color. MUST be a valid HEX code)
+        4. SECONDARY BRAND COLOR (The accent color. MUST be a valid HEX code)
+        5. LOGO URL (Look for the main logo in the header, favicon, or og:image. If it's a relative path, resolve it to a full URL. If not found, use a professional placeholder)
+        6. Brief Brand Context (3-4 sentences about their mission and values based on the content)
+        
+        Return ONLY a JSON object in this exact format:
+        {{
+            "name": "string",
+            "motto": "string",
+            "primaryColor": "string",
+            "secondaryColor": "string",
+            "logoUrl": "string",
+            "websiteContext": "string"
+        }}
+        """
+
+        generation_config = {
+            "temperature": 0.2, # Low temperature for consistent JSON
+            "top_p": 0.95,
+            "max_output_tokens": 1024,
+        }
+
+        response = await model.generate_content_async(prompt, generation_config=generation_config)
+        text = getattr(response, "text", "") or ""
+        
+        # Parse JSON from response
+        brand_data = None
+        json_match = re.search(r'\{[\s\S]*\}', text)
+        if json_match:
+            try:
+                brand_data = json.loads(json_match.group(0))
+            except:
+                pass
+        
+        if not brand_data:
+            raise HTTPException(status_code=502, detail="Failed to parse brand identity from AI response")
+
+        # Post-process: Ensure logoUrl is absolute
+        logo_url = brand_data.get("logoUrl", "")
+        if logo_url and logo_url.startswith("/") and not logo_url.startswith("//"):
+            from urllib.parse import urljoin
+            brand_data["logoUrl"] = urljoin(req.url, logo_url)
+        elif logo_url and not logo_url.startswith("http"):
+             # If it's just "images/logo.png", urljoin will still handle it if we are careful
+             from urllib.parse import urljoin
+             brand_data["logoUrl"] = urljoin(req.url, logo_url)
+
+        log_row.success = True
+        return brand_data
+
+    except Exception as e:
+        log_row.error_type = type(e).__name__
+        print(f"CRAWLER ERROR: {e}")
+        raise HTTPException(status_code=502, detail=str(e))
+    finally:
+        log_row.duration_ms = int((time.time() - started) * 1000)
+        db.commit()
+
+
 @app.post("/ai/chat", response_model=schemas.ChatResponse)
 @limiter.limit("10/minute")
 async def ai_chat_proxy(req: schemas.ChatRequest, request: Request,
@@ -1309,7 +1556,8 @@ async def ai_landing_chat_proxy(req: schemas.ChatRequest, request: Request, db: 
         # Call the dedicated AI service
         result = await ai_service.generate_landing_chat_response(
             prompt=req.prompt,
-            history=history_dicts
+            history=history_dicts,
+            language=req.language or "en"
         )
 
         text = result.get("response", "My neural link is currently unstable.")
@@ -1406,6 +1654,82 @@ async def ai_predict_proxy(student: schemas.StudentCreate, request: Request,
             db.commit()
         except Exception:
             db.rollback()
+
+
+@app.post("/ai/grade", response_model=schemas.GradingResult)
+@limiter.limit("5/minute")
+async def ai_grade(
+    file: UploadFile = File(...),
+    context: str = "",
+    request: Request = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(allow_ai_grade)
+):
+    """
+    AI Vision Grading Endpoint.
+    Accepts an image/document and returns a grading report.
+    """
+    school_id = normalize_school_id(getattr(current_user, "school_id", None))
+    started = time.time()
+    
+    # Validation
+    allowed_types = ["image/jpeg", "image/png", "application/pdf"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail=f"File type {file.content_type} not supported. Use JPG, PNG, or PDF.")
+    
+    # Max size 10MB
+    max_size = 10 * 1024 * 1024
+    content = await file.read()
+    if len(content) > max_size:
+        raise HTTPException(status_code=400, detail="File too large. Max 10MB.")
+
+    log_row = models.AIRequestLog(
+        user_id=getattr(current_user, "id", None),
+        school_id=school_id,
+        role=getattr(current_user, "role", None),
+        plan=_effective_plan(current_user),
+        endpoint=request.url.path,
+        request_type="vision_grading",
+        prompt_redacted=sanitize_input(context)[:500],
+        input_refs=f"filename={sanitize_input(file.filename)}",
+        success=False,
+    )
+    db.add(log_row)
+    db.flush()
+
+    try:
+        # Save file locally (simulating cloud storage)
+        upload_dir = os.path.join(os.getcwd(), "uploads", school_id)
+        os.makedirs(upload_dir, exist_ok=True)
+        file_path = os.path.join(upload_dir, f"{int(time.time())}_{file.filename}")
+        with open(file_path, "wb") as f:
+            f.write(content)
+        
+        # Process with AI
+        result = await ai_service.process_vision_grading(
+            image_data=content,
+            mime_type=file.content_type,
+            context=context
+        )
+
+        if "error" in result:
+            raise HTTPException(status_code=502, detail=result["error"])
+
+        log_row.success = True
+        log_row.output_hash = _hash_text(json.dumps(result))
+        log_row.duration_ms = int((time.time() - started) * 1000)
+        db.commit()
+
+        return result
+
+    except Exception as e:
+        log_row.success = False
+        log_row.error_type = str(type(e).__name__)
+        log_row.duration_ms = int((time.time() - started) * 1000)
+        db.commit()
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/ai/quiz")

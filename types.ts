@@ -13,6 +13,7 @@ export interface SchoolConfig {
     motto: string;
     logoUrl?: string;
     primaryColor: string; // Hex code
+    secondaryColor?: string; // Hex code
     isConfigured: boolean;
     websiteContext?: string; // New field: Stores the "Brain" of the school (policies, ethos)
     

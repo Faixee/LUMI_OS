@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SchoolConfig } from '../types';
 import { analyzeSchoolUrl } from '../services/geminiService';
+import { api } from '../services/api';
 import { Globe, RefreshCw, CheckCircle2, Cpu, Hash, Layout, Sparkles, AlertTriangle, Power, Shield, Zap, Server, Activity, Lock, ToggleRight, ToggleLeft } from 'lucide-react';
 
 interface SystemConfigProps {
@@ -22,6 +23,8 @@ const SystemConfig: React.FC<SystemConfigProps> = ({ currentConfig, onUpdateConf
   const [schoolName, setSchoolName] = useState(currentConfig?.name || '');
   const [motto, setMotto] = useState(currentConfig?.motto || '');
   const [color, setColor] = useState(currentConfig?.primaryColor || '#06b6d4');
+  const [secondaryColor, setSecondaryColor] = useState(currentConfig?.secondaryColor || '#6366f1');
+  const [logoUrl, setLogoUrl] = useState(currentConfig?.logoUrl || '');
   const [context, setContext] = useState(currentConfig?.websiteContext || '');
 
   // Core Module State
@@ -71,42 +74,84 @@ const SystemConfig: React.FC<SystemConfigProps> = ({ currentConfig, onUpdateConf
 
         const config = await analyzeSchoolUrl(url);
 
-        setScanLogs(prev => [...prev, '> Assets extracted.', '> Synthesizing identity matrix...']);
+        // Check for total failure vs partial success
+        const isFallback = config.websiteContext?.toLowerCase().includes('failed') || 
+                          config.websiteContext?.toLowerCase().includes('unavailable');
+
+        if (isFallback && !config.name) {
+            setScanLogs(prev => [...prev, '> ERROR: CRAWL INTERRUPTED.', '> REASON: Neural extraction incomplete', '> Reverting to local heuristics...']);
+            setScanStatus('idle');
+            return;
+        }
+
+        setScanLogs(prev => [
+            ...prev, 
+            '> Connection established.', 
+            `> Found school: ${config.name}`,
+            isFallback ? '> WARNING: Neural link weak. Using heuristic synthesis...' : '> Extracting color signatures...', 
+            '> Synthesizing brand context...'
+        ]);
+        
+        await new Promise(r => setTimeout(r, 1000));
         
         setSchoolName(config.name);
         setMotto(config.motto);
         setColor(config.primaryColor);
+        setSecondaryColor(config.secondaryColor || '#6366f1');
+        setLogoUrl(config.logoUrl || '');
         setContext(config.websiteContext || '');
 
+        setScanLogs(prev => [...prev, '> RE-INDEXING COMPLETE.', '> IDENTITY MATRIX READY.']);
         setScanStatus('complete');
         setFlashFields(true);
         setTimeout(() => setFlashFields(false), 2000);
-        setScanLogs(prev => [...prev, '> NEURAL MAP COMPLETE. READY FOR BROADCAST.', `> CONTEXT LOADED: ${config.websiteContext?.substring(0, 40)}...`]);
 
-    } catch (error) {
-        setScanStatus('error');
-        setScanLogs(prev => [...prev, '> ERROR: CRAWL FAILED.', '> Connection refused or invalid URL.']);
+    } catch (err: any) {
+        setScanLogs(prev => [
+            ...prev, 
+            '> ERROR: CRAWL INTERRUPTED.', 
+            `> REASON: ${err.message || 'Neural extraction incomplete'}`,
+            '> Reverting to local heuristics...'
+        ]);
+        setScanStatus('idle');
     } finally {
         setIsScanning(false);
     }
   };
 
-  const handleApply = () => {
+  const handleApply = async () => {
     setIsRebooting(true);
+    // Visual feedback for settings change
+    console.log(`[SYSTEM] Applying Security Protocol: ${securityLevel.toUpperCase()}`);
+    console.log(`[SYSTEM] AI Creativity Index set to: ${aiCreativity}%`);
+    
+    const newConfig: SchoolConfig = {
+        name: schoolName,
+        motto: motto,
+        primaryColor: color,
+        secondaryColor: secondaryColor,
+        logoUrl: logoUrl,
+        isConfigured: true,
+        websiteContext: context,
+        modules: modules,
+        systemSettings: {
+            securityLevel,
+            aiCreativity
+        }
+    };
+
+    // Save to backend if not in a pure demo session (this check is handled by api.ts auth headers)
+    try {
+        await api.updateSchoolConfig(newConfig);
+    } catch (err) {
+        console.error("Failed to persist school config:", err);
+    }
+    
     setTimeout(() => {
-        onUpdateConfig({
-            name: schoolName,
-            motto: motto,
-            primaryColor: color,
-            isConfigured: true,
-            websiteContext: context,
-            modules: modules,
-            systemSettings: {
-                securityLevel,
-                aiCreativity
-            }
-        });
+        onUpdateConfig(newConfig);
         setIsRebooting(false);
+        // Trigger a slight UI refresh effect
+        window.dispatchEvent(new CustomEvent('lumix:reboot_complete'));
     }, 1500);
   };
 
@@ -208,41 +253,79 @@ const SystemConfig: React.FC<SystemConfigProps> = ({ currentConfig, onUpdateConf
                 </h3>
 
                 <div className="space-y-6 flex-1">
-                    <div className="space-y-2">
-                        <label className="text-xs font-mono text-slate-400 uppercase">School Designation</label>
+                    <div className="space-y-2 group/field">
+                        <label className="text-xs font-mono text-slate-400 uppercase flex justify-between">
+                            School Designation
+                            {scanStatus === 'complete' && <span className="text-[10px] text-emerald-500 animate-pulse">EXTRACTED</span>}
+                        </label>
                         <div className="relative">
-                            <Hash size={16} className="absolute left-3 top-3.5 text-slate-500" />
+                            <Hash size={16} className={`absolute left-3 top-3.5 transition-colors ${scanStatus === 'complete' ? 'text-amber-500' : 'text-slate-500'}`} />
                             <input 
                                 value={schoolName}
                                 onChange={(e) => setSchoolName(e.target.value)}
-                                className={`w-full bg-slate-900/50 border rounded-xl py-3 pl-10 text-white font-bold outline-none transition-all duration-500 
+                                placeholder="Enter School Name"
+                                className={`w-full bg-slate-900/50 border rounded-xl py-3 pl-10 text-white font-bold outline-none transition-all duration-700 
                                 ${flashFields ? 'bg-amber-500/20 shadow-[0_0_20px_rgba(245,158,11,0.5)] scale-105' : ''}
                                 ${scanStatus === 'complete' ? 'border-amber-500/50 text-amber-400' : 'border-white/10 focus:border-purple-500'}`}
                             />
                         </div>
                     </div>
 
-                    <div className="space-y-2">
-                        <label className="text-xs font-mono text-slate-400 uppercase">Core Motto</label>
+                    <div className="space-y-2 group/field">
+                        <label className="text-xs font-mono text-slate-400 uppercase flex justify-between">
+                            Core Motto
+                            {scanStatus === 'complete' && <span className="text-[10px] text-emerald-500 animate-pulse">SYNTHESIZED</span>}
+                        </label>
                         <input 
                             value={motto}
                             onChange={(e) => setMotto(e.target.value)}
-                            className={`w-full bg-slate-900/50 border rounded-xl py-3 px-4 text-white outline-none transition-all duration-500
+                            placeholder="Enter School Motto"
+                            className={`w-full bg-slate-900/50 border rounded-xl py-3 px-4 text-white outline-none transition-all duration-700
                             ${flashFields ? 'bg-amber-500/20 shadow-[0_0_20px_rgba(245,158,11,0.5)] scale-105' : ''} 
                             ${scanStatus === 'complete' ? 'border-amber-500/50' : 'border-white/10 focus:border-purple-500'}`}
                         />
                     </div>
 
-                    <div className="space-y-2">
-                        <label className="text-xs font-mono text-slate-400 uppercase">Brand Vector (Color)</label>
-                        <div className="flex items-center gap-4">
+                    <div className="space-y-2 group/field">
+                        <label className="text-xs font-mono text-slate-400 uppercase flex justify-between">
+                            Logo Matrix (URL)
+                            {scanStatus === 'complete' && <span className="text-[10px] text-emerald-500 animate-pulse">ACQUIRED</span>}
+                        </label>
+                        <div className="flex gap-4">
+                            <div className="w-12 h-12 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden flex-shrink-0">
+                                {logoUrl ? (
+                                    <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                                ) : (
+                                    <Layout size={20} className="text-slate-600" />
+                                )}
+                            </div>
                             <input 
-                                type="color" 
-                                value={color}
-                                onChange={(e) => setColor(e.target.value)}
-                                className="w-12 h-12 rounded-lg bg-transparent cursor-pointer border-none"
+                                value={logoUrl}
+                                onChange={(e) => setLogoUrl(e.target.value)}
+                                placeholder="https://school.edu/logo.png"
+                                className={`flex-1 bg-slate-900/50 border rounded-xl py-3 px-4 text-white font-mono text-xs outline-none transition-all duration-700
+                                ${flashFields ? 'bg-amber-500/20 shadow-[0_0_20px_rgba(245,158,11,0.5)] scale-105' : ''} 
+                                ${scanStatus === 'complete' ? 'border-amber-500/50' : 'border-white/10 focus:border-purple-500'}`}
                             />
-                            <div className={`flex-1 bg-slate-900/50 border rounded-xl py-3 px-4 text-slate-300 font-mono uppercase transition-all duration-500 
+                        </div>
+                    </div>
+
+                    <div className="space-y-2 group/field">
+                        <label className="text-xs font-mono text-slate-400 uppercase flex justify-between">
+                            Primary Vector
+                            {scanStatus === 'complete' && <span className="text-[10px] text-emerald-500 animate-pulse">MATCHED</span>}
+                        </label>
+                        <div className="flex items-center gap-4">
+                            <div className="relative group/color">
+                                <input 
+                                    type="color" 
+                                    value={color}
+                                    onChange={(e) => setColor(e.target.value)}
+                                    className="w-12 h-12 rounded-lg bg-transparent cursor-pointer border-none relative z-10"
+                                />
+                                <div className="absolute inset-0 rounded-lg blur-sm opacity-50 group-hover/color:opacity-100 transition-opacity" style={{ backgroundColor: color }}></div>
+                            </div>
+                            <div className={`flex-1 bg-slate-900/50 border rounded-xl py-3 px-4 text-slate-300 font-mono uppercase transition-all duration-700 
                             ${flashFields ? 'bg-amber-500/20 shadow-[0_0_20px_rgba(245,158,11,0.5)] scale-105' : ''}
                             ${scanStatus === 'complete' ? 'border-amber-500/50 text-amber-400' : 'border-white/10'}`}>
                                 {color}
@@ -250,13 +333,45 @@ const SystemConfig: React.FC<SystemConfigProps> = ({ currentConfig, onUpdateConf
                         </div>
                     </div>
 
-                    <div className="space-y-2">
-                        <label className="text-xs font-mono text-slate-400 uppercase">LumiX Context (Hidden)</label>
-                        <textarea 
-                            value={context}
-                            readOnly
-                            className="w-full bg-slate-900/30 border border-white/10 rounded-xl p-3 text-xs text-slate-500 font-mono resize-none h-20 focus:outline-none"
-                        />
+                    <div className="space-y-2 group/field">
+                        <label className="text-xs font-mono text-slate-400 uppercase flex justify-between">
+                            Secondary Vector
+                            {scanStatus === 'complete' && <span className="text-[10px] text-emerald-500 animate-pulse">MATCHED</span>}
+                        </label>
+                        <div className="flex items-center gap-4">
+                            <div className="relative group/color">
+                                <input 
+                                    type="color" 
+                                    value={secondaryColor}
+                                    onChange={(e) => setSecondaryColor(e.target.value)}
+                                    className="w-12 h-12 rounded-lg bg-transparent cursor-pointer border-none relative z-10"
+                                />
+                                <div className="absolute inset-0 rounded-lg blur-sm opacity-50 group-hover/color:opacity-100 transition-opacity" style={{ backgroundColor: secondaryColor }}></div>
+                            </div>
+                            <div className={`flex-1 bg-slate-900/50 border rounded-xl py-3 px-4 text-slate-300 font-mono uppercase transition-all duration-700 
+                            ${flashFields ? 'bg-amber-500/20 shadow-[0_0_20px_rgba(245,158,11,0.5)] scale-105' : ''}
+                            ${scanStatus === 'complete' ? 'border-amber-500/50 text-amber-400' : 'border-white/10'}`}>
+                                {secondaryColor}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-2 group/field">
+                        <label className="text-xs font-mono text-slate-400 uppercase">LumiX Context (Deep Knowledge)</label>
+                        <div className="relative">
+                            <textarea 
+                                value={context}
+                                onChange={(e) => setContext(e.target.value)}
+                                placeholder="Neural context for AI agents..."
+                                className={`w-full bg-slate-900/30 border border-white/10 rounded-xl p-3 text-xs text-slate-400 font-mono resize-none h-24 focus:outline-none transition-all duration-700 custom-scrollbar
+                                ${scanStatus === 'complete' ? 'border-emerald-500/30 bg-emerald-500/5' : ''}`}
+                            />
+                            {scanStatus === 'complete' && (
+                                <div className="absolute top-2 right-2 flex items-center gap-1 text-[10px] text-emerald-500 font-bold bg-black/40 px-2 py-1 rounded">
+                                    <Sparkles size={10} /> AI GENERATED
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -351,7 +466,15 @@ const SystemConfig: React.FC<SystemConfigProps> = ({ currentConfig, onUpdateConf
                                  </div>
                                  <div className="flex items-end gap-1 h-8">
                                      {[40, 60, 45, 70, 50, 80, 55, 65, 45, 60, 50, 75, 55, 60, 45, 70, 50, 80].map((h, i) => (
-                                         <div key={i} className="flex-1 bg-emerald-500/20 rounded-sm" style={{ height: `${h}%` }}></div>
+                                         <div 
+                                            key={i} 
+                                            className="flex-1 bg-emerald-500/20 rounded-sm animate-pulse" 
+                                            style={{ 
+                                                height: `${h}%`,
+                                                animationDelay: `${i * 0.1}s`,
+                                                animationDuration: '1.5s'
+                                            }}
+                                        ></div>
                                      ))}
                                  </div>
                              </div>

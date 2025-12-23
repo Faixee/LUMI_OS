@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { Lock, ScanFace, ArrowRight, ShieldCheck, AlertCircle, UserPlus, LogIn, Eye, EyeOff, Info, CheckCircle2, Github, Mail } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Lock, ScanFace, ArrowRight, ShieldCheck, AlertCircle, UserPlus, LogIn, Eye, EyeOff, Info, CheckCircle2, Github, Mail, Unlock, Sparkles, ShieldAlert, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/auth';
 import { api } from '../services/api';
@@ -34,10 +34,28 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [loginState, setLoginState] = useState<'idle' | 'authenticating' | 'denied' | 'granted' | 'welcome'>('idle');
+  const [authData, setAuthData] = useState<any>(null);
+
+  // Check for existing session on mount
+  useEffect(() => {
+    const user = authService.getUser();
+    if (user.token && user.token !== 'null' && user.token !== 'undefined') {
+        const subStatus = (user.subscription || 'free').toLowerCase();
+        const role = (user.role || '').toLowerCase();
+        const isPaid = ['active', 'enterprise', 'pro', 'basic', 'demo'].includes(subStatus) || role === 'demo';
+        const isDev = ['developer', 'owner', 'admin'].includes(role);
+        
+        if (!isPaid && !isDev) {
+            setLoginState('denied');
+        }
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setLoginState('authenticating');
     setError('');
     setSuccessMsg('');
 
@@ -103,37 +121,42 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack }) => {
   };
 
   const handleAuthSuccess = (data: any) => {
+      setAuthData(data);
       const store = rememberMe ? localStorage : sessionStorage;
+      
+      const subStatus = (data.subscription_status || data.subscription || 'free').toLowerCase();
+      const role = (data.role || '').toLowerCase();
+      
+      const isDev = role === 'developer' || role === 'owner' || role === 'admin';
+      const isPaid = ['active', 'enterprise', 'pro', 'basic', 'demo'].includes(subStatus) || role === 'demo';
+      
+      // Store session data
       store.setItem('lumix_token', data.access_token);
       store.setItem('lumix_role', data.role);
       store.setItem('lumix_user', data.name);
-      
-      const subStatus = (data.subscription_status || 'free').toLowerCase();
-      const role = (data.role || '').toLowerCase();
-      
-      store.setItem('lumix_subscription', subStatus);
+      store.setItem('lumix_subscription', isPaid && subStatus === 'free' ? 'demo' : subStatus);
 
       if (!rememberMe) {
+        // Clear persistent storage if not remembering
         localStorage.removeItem('lumix_token');
         localStorage.removeItem('lumix_role');
         localStorage.removeItem('lumix_user');
         localStorage.removeItem('lumix_subscription');
       }
       
-      // Logic: If Developer/Owner/Admin -> Always Allow
-      // If Paid (active, enterprise, pro, basic) -> Allow
-      // If Free/Demo -> Redirect to Subscribe
-      
-      const isDev = role === 'developer' || role === 'owner' || role === 'admin';
-      const isPaid = ['active', 'enterprise', 'pro', 'basic'].includes(subStatus);
-      
       if (isDev || isPaid) {
+          setLoginState('granted');
+          // Start the polished welcome sequence
+          setTimeout(() => {
+              setLoginState('welcome');
+          }, 1500); // 1.5s for "Access Granted"
+          
           setTimeout(() => {
               onLoginSuccess(data.role, data.name);
-          }, 500);
+          }, 4500); // 1.5s granted + 3s welcome
       } else {
-          // Free user trying to login via System Login -> Redirect to Subscribe
-          navigate('/subscribe');
+          setLoginState('denied');
+          setLoading(false);
       }
   };
 
@@ -148,11 +171,126 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack }) => {
     return Math.min(100, score);
   };
 
-  return (
-    <div className="responsive-container">
-        {/* Background Effects are inherited from body/index.html */}
+  const handleDemoMode = async () => {
+        setLoading(true);
+        setLoginState('authenticating');
+        try {
+            const data = await authService.demoLogin();
+            handleAuthSuccess(data);
+        } catch (err: any) {
+            setError(err.message || "Demo Access Failed");
+            setLoading(false);
+            setLoginState('idle');
+        }
+    };
 
-        <div className="glass-panel login-panel rounded-3xl border border-white/10 shadow-[0_0_100px_rgba(79,70,229,0.2)] relative z-10 animate-in zoom-in-95 duration-700">
+    if (loginState === 'welcome') {
+        return (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/20 via-black to-cyan-900/20 animate-pulse" />
+                <div className="relative z-10 text-center space-y-8 animate-welcome">
+                    <div className="relative inline-block">
+                        <div className="w-32 h-32 md:w-40 md:h-40 bg-indigo-500/10 rounded-full flex items-center justify-center border border-indigo-500/30 shadow-[0_0_50px_rgba(79,70,229,0.3)]">
+                            <Sparkles size={60} className="text-cyan-400 animate-pulse" />
+                        </div>
+                        <div className="absolute -inset-4 bg-cyan-500/20 rounded-full blur-2xl animate-pulse" />
+                    </div>
+                    
+                    <div className="space-y-4">
+                        <h1 className="text-4xl md:text-6xl font-bold text-white font-sci-fi tracking-[0.2em] text-glow-animate">
+                            WELCOME TO LUMIX
+                        </h1>
+                        <p className="text-cyan-400/60 font-mono text-sm md:text-base tracking-[0.5em] uppercase animate-in slide-in-from-bottom-4 duration-1000 delay-300">
+                            System Core Initialized
+                        </p>
+                    </div>
+
+                    <div className="flex flex-col items-center gap-4 mt-12">
+                        <div className="w-64 h-1 bg-white/5 rounded-full overflow-hidden">
+                            <div className="h-full bg-gradient-to-r from-indigo-500 to-cyan-500 animate-[loading_3s_ease-in-out_forwards]" />
+                        </div>
+                        <span className="text-[10px] font-mono text-slate-500 tracking-widest animate-pulse uppercase">
+                            Loading secure environment...
+                        </span>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="responsive-container">
+            {/* Access Denied Modal */}
+            {loginState === 'denied' && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4 animate-in fade-in duration-500">
+                    <div className="glass-panel max-w-md w-full p-10 rounded-[2rem] border border-rose-500/30 shadow-[0_0_100px_rgba(244,63,94,0.15)] text-center space-y-8 animate-lock-shake relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-rose-500/50 to-transparent" />
+                        
+                        <div className="w-24 h-24 bg-rose-500/10 rounded-3xl mx-auto flex items-center justify-center border border-rose-500/30 shadow-[0_0_30px_rgba(244,63,94,0.2)] animate-float">
+                            <Lock size={48} className="text-rose-500" />
+                        </div>
+                        
+                        <div className="space-y-3">
+                            <h2 className="text-3xl font-bold text-white font-sci-fi tracking-widest uppercase">Access Denied</h2>
+                            <p className="text-slate-400 text-sm font-mono leading-relaxed">
+                                This system is available only to active subscribers.
+                            </p>
+                        </div>
+
+                        <div className="flex flex-col gap-4 pt-4">
+                            <button 
+                                onClick={() => navigate('/subscribe')}
+                                className="w-full bg-rose-600 hover:bg-rose-500 text-white p-5 rounded-2xl font-bold font-sci-fi tracking-[0.2em] transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(244,63,94,0.3)]"
+                            >
+                                <Zap size={20} />
+                                BUY SUBSCRIPTION
+                            </button>
+                            <button 
+                                onClick={handleDemoMode}
+                                className="w-full bg-white/5 hover:bg-white/10 text-white p-5 rounded-2xl font-bold font-sci-fi tracking-[0.2em] transition-all border border-white/10 flex items-center justify-center gap-3 group"
+                            >
+                                <ScanFace size={20} className="group-hover:text-cyan-400 transition-colors" />
+                                TRY DEMO MODE
+                            </button>
+                            <button 
+                                onClick={() => setLoginState('idle')}
+                                className="text-[10px] text-slate-500 hover:text-white transition-colors font-mono uppercase tracking-[0.3em] pt-4"
+                            >
+                                ← Return to System Authentication
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Access Granted Modal */}
+            {loginState === 'granted' && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center bg-emerald-500/5 backdrop-blur-md animate-in fade-in duration-500">
+                    <div className="glass-panel max-w-md w-full p-10 rounded-[2rem] border border-emerald-500/30 shadow-[0_0_100px_rgba(16,185,129,0.15)] text-center space-y-8 animate-unlock">
+                        <div className="w-24 h-24 bg-emerald-500/10 rounded-3xl mx-auto flex items-center justify-center border border-emerald-500/30 shadow-[0_0_30px_rgba(16,185,129,0.2)]">
+                            <Unlock size={48} className="text-emerald-400" />
+                        </div>
+                        
+                        <div className="space-y-3">
+                            <h2 className="text-3xl font-bold text-white font-sci-fi tracking-widest uppercase text-glow">Access Granted</h2>
+                            <p className="text-emerald-400/60 text-xs font-mono tracking-[0.2em] uppercase">
+                                Identity Verified • Subscription Active
+                            </p>
+                        </div>
+
+                        <div className="flex flex-col items-center gap-4 pt-4">
+                            <div className="flex gap-1">
+                                {[1, 2, 3].map(i => (
+                                    <div key={i} className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.1}s` }} />
+                                ))}
+                            </div>
+                            <span className="text-[10px] font-mono text-emerald-500/40 tracking-[0.4em] uppercase">Initialising Core...</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div className={`glass-panel login-panel rounded-3xl border border-white/10 shadow-[0_0_100px_rgba(79,70,229,0.2)] relative z-10 animate-in zoom-in-95 duration-700 ${loginState === 'granted' ? 'opacity-0' : ''}`}>
             {onBack && (
               <button 
                 onClick={onBack}

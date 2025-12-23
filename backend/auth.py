@@ -2,7 +2,10 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict
 import hashlib
 import secrets
+import logging
 from types import SimpleNamespace
+
+logger = logging.getLogger("lumios.auth")
 from jose import jwt, JWTError
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -14,6 +17,25 @@ from .config import settings
 SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = settings.ALGORITHM
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+
+# Password Hashing - Centralized for production security
+# OWASP recommends 600,000 iterations for PBKDF2-HMAC-SHA256
+HASH_ITERATIONS = 600000
+
+def get_password_hash(password: str) -> str:
+    """Generate a secure password hash using PBKDF2-HMAC-SHA256."""
+    salt = secrets.token_bytes(16).hex()
+    dk = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), bytes.fromhex(salt), HASH_ITERATIONS)
+    return f"{salt}:{dk.hex()}"
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a plain password against its hashed version."""
+    try:
+        salt_hex, hash_hex = hashed_password.split(":")
+        dk = hashlib.pbkdf2_hmac('sha256', plain_password.encode('utf-8'), bytes.fromhex(salt_hex), HASH_ITERATIONS)
+        return dk.hex() == hash_hex
+    except (ValueError, TypeError, Exception):
+        return False
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
@@ -242,10 +264,10 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         )
         username: str = payload.get("sub")
         if username is None:
-            print(f"DEBUG AUTH: No username in payload: {payload}")
+            logger.warning(f"No username in payload: {payload}")
             raise credentials_exception
     except JWTError as e:
-        print(f"DEBUG AUTH: JWT Error: {e}")
+        logger.error(f"JWT Error: {e}")
         raise credentials_exception
 
     role = (payload.get("role") or "").strip().lower()
@@ -269,7 +291,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         allow = _developer_email_allowlist()
         email = (payload.get("email") or "").strip().lower()
         if not email or email not in allow:
-            print(f"DEBUG AUTH: Developer email not in allowlist: {email}")
+            logger.warning(f"Developer email not in allowlist: {email}")
             raise credentials_exception
         return SimpleNamespace(
             id=None,
@@ -287,15 +309,12 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
     user = db.query(models.User).filter(models.User.username == username).first()
     if user is None:
-        print(f"DEBUG AUTH: User not found in DB: '{username}'")
-        # List all usernames for debugging
-        all_users = [u.username for u in db.query(models.User).all()]
-        print(f"DEBUG AUTH: Existing users: {all_users}")
+        logger.warning(f"User not found in DB: '{username}'")
         raise credentials_exception
 
     token_tv = payload.get("tv")
     if token_tv is not None and int(token_tv) != int(getattr(user, "token_version", 0) or 0):
-        print(f"DEBUG AUTH: Token version mismatch. Token: {token_tv}, DB: {getattr(user, 'token_version', 0)}")
+        logger.warning(f"Token version mismatch. Token: {token_tv}, DB: {getattr(user, 'token_version', 0)}")
         raise credentials_exception
     return user
 

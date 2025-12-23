@@ -19,9 +19,16 @@ const TeacherAITools: React.FC = () => {
 
   // Grader State
   const [isScanning, setIsScanning] = useState(false);
-  const [scanResult, setScanResult] = useState<{score: number, feedback: string, student: string} | null>(null);
+  const [scanResult, setScanResult] = useState<{
+    student: string, 
+    score: number, 
+    feedback: string, 
+    annotations?: {point: string, comment: string}[],
+    insights?: {strengths: string[], weaknesses: string[], recommendation: string}
+  } | null>(null);
   const [uploadStatus, setUploadStatus] = useState<'idle'|'uploading'|'success'|'error'>('idle');
   const [uploadMsg, setUploadMsg] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,33 +52,37 @@ const TeacherAITools: React.FC = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const simulateGrading = () => {
+  const handleGradeAssignment = async () => {
+      if (!selectedFile) {
+          setUploadStatus('error');
+          setUploadMsg('Please select a file first');
+          return;
+      }
+      
       setIsScanning(true);
       setScanResult(null);
-      // Simulate Vision AI Processing
-      setTimeout(() => {
+      setUploadStatus('uploading');
+      setUploadMsg('AI Vision Analysis in progress...');
+      
+      try {
+          const result = await api.gradeAssignment(selectedFile);
+          setScanResult(result);
+          setUploadStatus('success');
+          setUploadMsg('Analysis complete');
+      } catch (err: any) {
+          setUploadStatus('error');
+          setUploadMsg(err.message || 'AI processing failed');
+      } finally {
           setIsScanning(false);
-          setScanResult({
-              student: "Sarah Connor (Detected)",
-              score: 88,
-              feedback: "**Analysis:**\n- ✅ Q1: Correct logic on thermodynamics.\n- ✅ Q2: Excellent diagram.\n- ❌ Q3: Calculation error in final step (-2 pts).\n- ⚠️ Handwriting legibility low in Section B."
-          });
-      }, 2500);
+      }
   };
 
-  const handleAssignmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setUploadStatus('uploading');
-    setUploadMsg('Uploading...');
-    try {
-      const res = await api.uploadAssignment(file);
-      setUploadStatus('success');
-      setUploadMsg(`Stored ${res.filename} (${Math.round(res.bytes/1024)} KB)`);
-    } catch (err: any) {
-      setUploadStatus('error');
-      setUploadMsg(err.message || 'Upload failed');
-    }
+    setSelectedFile(file);
+    setUploadStatus('idle');
+    setUploadMsg(`Selected: ${file.name}`);
   };
 
   return (
@@ -204,19 +215,31 @@ const TeacherAITools: React.FC = () => {
                         </div>
                     ) : (
                         <div className="space-y-6 relative z-10">
-                          <div className="w-32 h-32 bg-black/40 border-2 border-dashed border-cyan-500/50 rounded-2xl flex items-center justify-center mx-auto group-hover:border-cyan-400 group-hover:scale-105 transition-all shadow-[0_0_30px_rgba(0,0,0,0.3)]">
+                          <div className={`w-32 h-32 bg-black/40 border-2 ${selectedFile ? 'border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.3)]' : 'border-dashed border-cyan-500/50'} rounded-2xl flex items-center justify-center mx-auto group-hover:border-cyan-400 group-hover:scale-105 transition-all shadow-[0_0_30px_rgba(0,0,0,0.3)]`}>
                                 <label className="cursor-pointer flex flex-col items-center justify-center" aria-label="Upload assignment">
-                                  <Camera size={48} className="text-cyan-500/50 group-hover:text-cyan-400 transition-colors" />
-                                  <input type="file" accept="image/*,application/pdf" onChange={handleAssignmentUpload} className="hidden" />
+                                  {selectedFile ? (
+                                      <FileCheck size={48} className="text-cyan-400" />
+                                  ) : (
+                                      <Camera size={48} className="text-cyan-500/50 group-hover:text-cyan-400 transition-colors" />
+                                  )}
+                                  <input type="file" accept="image/*,application/pdf" onChange={handleFileChange} className="hidden" />
                                 </label>
                           </div>
                           <div>
-                              <h3 className="text-xl font-bold text-white font-sci-fi">UPLOAD ASSIGNMENT</h3>
-                              <p className="text-slate-400 font-mono text-xs mt-2">Drag & Drop or Click to Scan Paper</p>
+                              <h3 className="text-xl font-bold text-white font-sci-fi">
+                                  {selectedFile ? 'FILE READY' : 'UPLOAD ASSIGNMENT'}
+                              </h3>
+                              <p className="text-slate-400 font-mono text-xs mt-2">
+                                  {selectedFile ? selectedFile.name : 'Drag & Drop or Click to Scan Paper'}
+                              </p>
                           </div>
-                            <div className="flex items-center justify-center gap-3">
-                              <button onClick={simulateGrading} className="bg-cyan-600 hover:bg-cyan-500 text-white px-8 py-3 rounded-xl font-bold font-sci-fi tracking-widest shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all">
-                                  INITIATE SCAN
+                            <div className="flex flex-col items-center justify-center gap-3">
+                              <button 
+                                onClick={handleGradeAssignment} 
+                                disabled={!selectedFile || isScanning}
+                                className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-8 py-3 rounded-xl font-bold font-sci-fi tracking-widest shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all"
+                              >
+                                  {isScanning ? 'ANALYZING...' : 'INITIATE SCAN'}
                               </button>
                               {uploadStatus !== 'idle' && (
                                 <span className={`text-xs font-mono ${uploadStatus==='success' ? 'text-emerald-400' : uploadStatus==='error' ? 'text-rose-400' : 'text-cyan-400'}`}>{uploadMsg}</span>
@@ -235,7 +258,7 @@ const TeacherAITools: React.FC = () => {
                         </h3>
                     </div>
                     
-                    <div className="flex-1 p-8 bg-slate-900/50 relative">
+                    <div className="flex-1 p-8 bg-slate-900/50 relative overflow-y-auto custom-scrollbar">
                         {scanResult ? (
                             <div className="space-y-6 animate-in slide-in-from-right-10 duration-500">
                                 <div className="flex justify-between items-start">
@@ -249,12 +272,53 @@ const TeacherAITools: React.FC = () => {
                                     </div>
                                 </div>
 
-                                <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                                <div className="bg-white/5 border border-white/10 rounded-xl p-4 max-h-[300px] overflow-y-auto custom-scrollbar scroll-smooth pr-2">
                                     <p className="text-xs font-mono text-cyan-400 uppercase mb-2">AI Analysis Feedback</p>
                                     <div className="prose prose-invert prose-sm">
                                         <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{scanResult.feedback}</ReactMarkdown>
                                     </div>
                                 </div>
+
+                                {scanResult.annotations && scanResult.annotations.length > 0 && (
+                                    <div className="space-y-2">
+                                        <p className="text-xs font-mono text-purple-400 uppercase">Key Annotations</p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            {scanResult.annotations.map((ann, idx) => (
+                                                <div key={idx} className="bg-purple-900/20 border border-purple-500/20 p-2 rounded-lg text-xs">
+                                                    <span className="font-bold text-purple-300">{ann.point}:</span> {ann.comment}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {scanResult.insights && (
+                                    <div className="bg-cyan-900/20 border border-cyan-500/20 p-4 rounded-xl space-y-3">
+                                        <p className="text-xs font-mono text-cyan-400 uppercase">Learning Insights</p>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <p className="text-[10px] text-slate-400 uppercase mb-1">Strengths</p>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {scanResult.insights.strengths.map((s, i) => (
+                                                        <span key={i} className="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded text-[10px]">{s}</span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] text-slate-400 uppercase mb-1">Focus Areas</p>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {scanResult.insights.weaknesses.map((w, i) => (
+                                                        <span key={i} className="bg-rose-500/20 text-rose-400 px-2 py-0.5 rounded text-[10px]">{w}</span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="pt-2 border-t border-cyan-500/10">
+                                            <p className="text-[10px] text-slate-400 uppercase mb-1">Recommendation</p>
+                                            <p className="text-xs text-white italic">"{scanResult.insights.recommendation}"</p>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="flex flex-col sm:flex-row gap-3 pt-4">
                                     <button 

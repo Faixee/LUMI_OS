@@ -131,27 +131,27 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateLogin }) => {
 
   const handleSystemLogin = () => {
     const user = authService.getUser();
-    const subscription = (user.subscription || '').toLowerCase().trim();
-    const role = (user.role || '').toLowerCase().trim();
-
-    // Strategy Sequence:
-    // 1. If already logged in and Paid/Dev -> App
-    // 2. If already logged in but NOT Paid -> Subscribe
-    // 3. If NOT logged in -> Login Screen
+    const token = user.token;
     
-    if (user.token) {
-      const isPaid = ['active', 'enterprise', 'pro', 'basic'].includes(subscription);
-      const isDev = ['developer', 'owner', 'admin'].includes(role);
+    // Check if token is valid (not 'null', 'undefined', or empty)
+    const isValidToken = token && token !== 'null' && token !== 'undefined' && token.length > 0;
+
+    if (isValidToken) {
+      const subscription = (user.subscription || '').toLowerCase().trim();
+      const role = (user.role || '').toLowerCase().trim();
+      
+      const isPaid = ['active', 'enterprise', 'pro', 'basic', 'demo'].includes(subscription);
+      const isDev = ['developer', 'owner', 'admin'].includes(role) || role === 'demo';
       
       if (isPaid || isDev) {
         navigate('/app');
       } else {
-        navigate('/subscribe');
+        // If logged in but not paid, send to login so it shows the Access Denied modal
+        navigate('/login');
       }
-      return;
+    } else {
+      onNavigateLogin();
     }
-
-    onNavigateLogin();
   };
 
   const [isSystemTourActive, setIsSystemTourActive] = useState(false);
