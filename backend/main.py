@@ -16,7 +16,7 @@ import json
 import re
 import httpx
 import logging
-from .config import settings
+from backend.config import settings
 from pythonjsonlogger import jsonlogger
 
 # --- LOGGING CONFIGURATION ---
@@ -29,8 +29,8 @@ log_handler.setFormatter(formatter)
 logger.addHandler(log_handler)
 logger.setLevel(logging.INFO if settings.ENVIRONMENT == "production" else logging.DEBUG)
 
-from . import models, schemas, database, auth
-from .ai_service import ai_service
+from backend import models, schemas, database, auth
+from backend.ai_service import ai_service
 
 from backend.security import add_security_headers, validate_request_size, validate_csrf_token, sanitize_input, validate_email, validate_password_strength, validate_username
 import hashlib

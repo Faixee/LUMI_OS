@@ -5,13 +5,15 @@ import json
 
 # Add the project root and api folder to sys.path
 # This ensures 'backend' can be imported correctly by Vercel's serverless builder
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-api_dir = os.path.dirname(os.path.abspath(__file__))
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
 
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
-if api_dir not in sys.path:
-    sys.path.insert(0, api_dir)
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+if os.getcwd() not in sys.path:
+    sys.path.insert(0, os.getcwd())
 
 # Import the FastAPI app
 try:
