@@ -211,18 +211,24 @@ export const api = {
 
   sendLandingChat: async (prompt: string, history: { role: string, content: string }[] = [], language: string = 'en') => {
       try {
-          const res = await fetch(`${API_URL}/ai/landing-chat`, {
+          const url = `${API_URL}/ai/landing-chat`;
+          console.log(`[LUMIX] Sending landing chat to: ${url}`);
+          
+          const res = await fetch(url, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ prompt, history, language })
           });
+          
           const data = await res.json();
           if (!res.ok) {
+              console.error(`[LUMIX] Landing chat error (${res.status}):`, data);
               return { response: data.detail || data.message || "My neural link is currently unstable. Please try again later." };
           }
           return data;
-      } catch (e) {
-          return { response: "Connection to NOVA core failed. Please check your network." };
+      } catch (e: any) {
+          console.error("[LUMIX] Connection to NOVA core failed:", e);
+          return { response: `Connection to NOVA core failed. (Reason: ${e.message || 'Network Error'})` };
       }
   },
 

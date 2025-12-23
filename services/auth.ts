@@ -13,6 +13,7 @@ const getApiUrl = () => {
 };
 
 const API_URL = getApiUrl();
+console.log(`[LUMIX] Auth API_URL initialized as: ${API_URL}`);
 
 export interface AuthResponse {
     access_token: string;

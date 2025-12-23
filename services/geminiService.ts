@@ -17,6 +17,7 @@ const getApiUrl = () => {
 };
 
 const API_URL = getApiUrl();
+console.log(`[LUMIX] Gemini API_URL initialized as: ${API_URL}`);
 
 const getHeaders = () => {
     const user = authService.getUser();
