@@ -2,8 +2,10 @@ import os
 import sys
 
 # Add the project root to sys.path
+# This ensures 'backend' can be imported correctly by Vercel's serverless builder
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, project_root)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 # Import the FastAPI app
 try:
@@ -22,5 +24,7 @@ except Exception as e:
         return [json.dumps({
             "detail": "FastAPI failed to start on Vercel",
             "error": str(e),
-            "traceback": traceback.format_exc()
+            "traceback": traceback.format_exc(),
+            "sys_path": sys.path,
+            "cwd": os.getcwd()
         }).encode('utf-8')]
