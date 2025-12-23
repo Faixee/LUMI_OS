@@ -1648,6 +1648,18 @@ async def ai_landing_chat_proxy(req: schemas.ChatRequest, request: Request, db: 
     origin = request.headers.get("origin")
     referer = request.headers.get("referer")
     
+@app.post("/ai/landing-chat", response_model=schemas.ChatResponse)
+@limiter.limit("10/minute")
+async def ai_landing_chat_proxy(req: schemas.ChatRequest, request: Request, db: Session = Depends(get_db)):
+    """
+    Public AI Endpoint for Landing Page Chatbot.
+    Now powered by OpenAI with dedicated service.
+    Includes rate limiting and basic security checks.
+    """
+    # Simple Origin Check for basic security (can be spoofed but good as a first layer)
+    origin = request.headers.get("origin")
+    referer = request.headers.get("referer")
+    
     # In production, you might want to restrict this to your actual domains
     # for now, we allow localhost/127.0.0.1 as per CORS settings
     
