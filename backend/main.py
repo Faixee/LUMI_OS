@@ -55,8 +55,22 @@ async def root():
     return {"status": "LumiX Core Online", "version": "1.0.0", "system": "LumiX Core"}
 
 @app.get("/health")
-async def health():
-    return {"status": "LumiX Core Online", "version": "1.0.0"}
+async def health(db: Session = Depends(database.get_db)):
+    try:
+        # Simple query to check DB connection
+        db.execute(text("SELECT 1"))
+        db_status = "online"
+    except Exception as e:
+        logger.error(f"Health check DB error: {e}")
+        db_status = "offline"
+        
+    return {
+        "status": "LumiX Core Online", 
+        "version": "1.0.0",
+        "database": db_status,
+        "environment": settings.ENVIRONMENT,
+        "mode": "production" if settings.ENVIRONMENT == "production" else "development"
+    }
 
 # ----------------------------
 # WEBRTC SIGNALING

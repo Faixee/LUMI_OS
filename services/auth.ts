@@ -88,7 +88,7 @@ export const authService = {
                 body: JSON.stringify(payload)
             });
         } catch (e: any) {
-            throw new Error('Network error: Failed to reach API. Start backend at http://127.0.0.1:8000 and retry.');
+            throw new Error('Network error: Failed to reach API. Please ensure the backend is running and accessible.');
         }
 
         if (!res.ok) {
