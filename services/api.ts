@@ -87,9 +87,15 @@ export const api = {
     try {
       console.log(`[LUMIX] Checking health at ${API_URL}/`);
       const res = await fetch(`${API_URL}/`);
-      const data = await res.json();
-      console.log(`[LUMIX] Health check response:`, data);
-      return data;
+      const responseText = await res.text();
+      try {
+        const data = JSON.parse(responseText);
+        console.log(`[LUMIX] Health check response:`, data);
+        return data;
+      } catch (parseError) {
+        console.warn(`[LUMIX] Health check returned non-JSON (HTTP ${res.status}):`, responseText);
+        return { status: res.status === 200 ? "ONLINE" : "OFFLINE", detail: responseText };
+      }
     } catch (e) {
       console.error("[LUMIX] Health check failed:", e);
       return { status: "OFFLINE" };
