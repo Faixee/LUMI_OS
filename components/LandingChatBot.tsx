@@ -188,11 +188,176 @@ const LandingChatBot: React.FC<LandingChatBotProps> = ({ onScrollTo }) => {
     const MAX_RECOGNITION_RETRIES = 3;
 
     // → VOICE & RECOGNITION FUNCTIONS
-    const startCall = async () => { /* → full startCall function from your new code */ };
-    const endCall = () => { /* → full endCall function from your new code */ };
-    const drawWaveform = () => { /* → full drawWaveform function */ };
-    const toggleMute = () => { /* → toggleMute function */ };
-    const initRecognition = useCallback(() => { /* → full recognition setup */ }, [currentLang.code, callState.isActive, handleSend]);
+    const drawWaveform = () => {
+        if (!canvasRef.current || !analyzerRef.current || !callState.isActive) return;
+        
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const analyzer = analyzerRef.current;
+        const bufferLength = analyzer.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+
+        const draw = () => {
+            if (!callState.isActive) return;
+            animationFrameRef.current = requestAnimationFrame(draw);
+
+            analyzer.getByteFrequencyData(dataArray);
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const barWidth = (canvas.width / bufferLength) * 2.5;
+            let barHeight;
+            let x = 0;
+
+            for (let i = 0; i < bufferLength; i++) {
+                barHeight = dataArray[i] / 2;
+                ctx.fillStyle = `rgb(${barHeight + 100}, 50, 255)`;
+                ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+                x += barWidth + 1;
+            }
+        };
+        draw();
+    };
+
+    const toggleMute = () => {
+        if (streamRef.current) {
+            streamRef.current.getAudioTracks().forEach(track => {
+                track.enabled = !callState.isMuted;
+            });
+            setCallState(prev => ({ ...prev, isMuted: !prev.isMuted }));
+        }
+    };
+
+    const initRecognition = useCallback(() => {
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) return;
+        
+        const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+        const recognition = new SpeechRecognition();
+        
+        recognition.continuous = false; // We want distinct phrases in chat mode
+        recognition.interimResults = false;
+        recognition.lang = currentLang.code === 'ur' ? 'ur-PK' :
+                           currentLang.code === 'hi' ? 'hi-IN' :
+                           currentLang.code === 'ar' ? 'ar-SA' :
+                           currentLang.code === 'es' ? 'es-ES' :
+                           currentLang.code === 'fr' ? 'fr-FR' : 'en-US';
+
+        recognition.onstart = () => {
+            setIsListening(true);
+            setSpeechError(null);
+        };
+
+        recognition.onend = () => {
+            setIsListening(false);
+            // If we are in a call, restart listening (continuous conversation)
+            if (callState.isActive && recognitionRetryRef.current < MAX_RECOGNITION_RETRIES) {
+                try {
+                    recognition.start();
+                } catch {
+                    recognitionRetryRef.current++;
+                }
+            }
+        };
+
+        recognition.onresult = (event: any) => {
+            const transcript = event.results[0][0].transcript;
+            if (transcript.trim()) {
+                setInput(transcript);
+                handleSend(transcript);
+                recognitionRetryRef.current = 0; // Reset retries on success
+            }
+        };
+
+        recognition.onerror = (event: any) => {
+            console.warn("Speech recognition error:", event.error);
+            if (event.error === 'not-allowed') {
+                setSpeechError("Microphone access denied.");
+            }
+        };
+
+        recognitionRef.current = recognition;
+    }, [currentLang.code, callState.isActive, handleSend]);
+
+    const startCall = async () => {
+        setSpeechError(null);
+        recognitionRetryRef.current = 0;
+        try {
+            setCallState(prev => ({ ...prev, isConnecting: true }));
+            
+            // 1. Request Microphone Access
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                } 
+            });
+            streamRef.current = stream;
+
+            // 2. Initialize Audio Context for Visualizer
+            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+            const audioCtx = new AudioContextClass();
+            audioContextRef.current = audioCtx;
+
+            const source = audioCtx.createMediaStreamSource(stream);
+            const analyzer = audioCtx.createAnalyser();
+            analyzer.fftSize = 256;
+            source.connect(analyzer);
+            analyzerRef.current = analyzer;
+
+            // 3. Setup WebRTC (Simulated)
+            const pc = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+            });
+            peerConnectionRef.current = pc;
+            
+            stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+            // 4. Start Recognition
+            initRecognition();
+            if (recognitionRef.current) {
+                recognitionRef.current.start();
+            }
+
+            setCallState(prev => ({ ...prev, isConnecting: false, isActive: true }));
+            
+            // Start Visualizer
+            setTimeout(drawWaveform, 100);
+
+            // Initial Greeting
+            const greeting = currentLang.code === 'ur' ? "میں سن رہی ہوں۔" : "I'm listening.";
+            speak(greeting);
+
+        } catch (err) {
+            console.error("Failed to start call:", err);
+            setSpeechError("Could not access microphone.");
+            setCallState(prev => ({ ...prev, isConnecting: false, isActive: false }));
+        }
+    };
+
+    const endCall = () => {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+        }
+        if (audioContextRef.current) {
+            audioContextRef.current.close();
+        }
+        if (peerConnectionRef.current) {
+            peerConnectionRef.current.close();
+        }
+        if (recognitionRef.current) {
+            recognitionRef.current.stop();
+        }
+        if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+        }
+        
+        setCallState(prev => ({ ...prev, isActive: false, isConnecting: false }));
+        setIsListening(false);
+    };
 
     // → UI Return (Keep mostly same, only wire startCall, endCall, handleSend, speak)
     return (
