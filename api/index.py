@@ -3,27 +3,27 @@ import sys
 import traceback
 import json
 
-# Add the project root to sys.path
+# Add the project root and api folder to sys.path
 # This ensures 'backend' can be imported correctly by Vercel's serverless builder
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+api_dir = os.path.dirname(os.path.abspath(__file__))
+
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+if api_dir not in sys.path:
+    sys.path.insert(0, api_dir)
 
 # Import the FastAPI app
 try:
     from backend.main import app
+    
     # Set root_path for Vercel
+    # This allows FastAPI to handle routes starting with /api correctly
     app.root_path = "/api"
     
-    # Optional: Add a direct Vercel debug route
-    @app.get("/vercel-debug")
-    async def vercel_debug():
-        return {
-            "status": "online",
-            "environment": os.environ.get("VERCEL_ENV", "unknown"),
-            "sys_path": sys.path,
-            "cwd": os.getcwd()
-        }
+    @app.get("/health-check")
+    async def vercel_health():
+        return {"status": "ok", "source": "vercel-handler"}
         
     handler = app
 except Exception as e:

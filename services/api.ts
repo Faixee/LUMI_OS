@@ -229,7 +229,7 @@ export const api = {
       
       try {
           const url = `${API_URL}/ai/landing-chat`;
-          console.log(`[LUMIX] Sending landing chat to: ${url} (Origin: ${typeof window !== 'undefined' ? window.location.origin : 'unknown'})`);
+          console.log(`[LUMIX] Sending landing chat to: ${url} (API_URL: ${API_URL}, hostname: ${typeof window !== 'undefined' ? window.location.hostname : 'N/A'})`);
           
           const res = await fetch(url, {
               method: 'POST',
