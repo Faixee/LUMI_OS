@@ -1637,10 +1637,6 @@ async def ai_chat_proxy(req: schemas.ChatRequest, request: Request,
 
 
 @app.post("/ai/landing-chat", response_model=schemas.ChatResponse)
-    origin = request.headers.get("origin")
-    referer = request.headers.get("referer")
-    
-@app.post("/ai/landing-chat", response_model=schemas.ChatResponse)
 @limiter.limit("10/minute")
 async def ai_landing_chat_proxy(req: schemas.ChatRequest, request: Request, db: Session = Depends(get_db)):
     """
