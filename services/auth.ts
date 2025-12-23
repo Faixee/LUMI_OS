@@ -1,15 +1,18 @@
 const getApiUrl = () => {
-  const envUrl = (import.meta as any).env?.VITE_API_URL;
-  if (envUrl) return envUrl;
-
-  if (typeof window !== 'undefined' && 
-      window.location.hostname !== 'localhost' && 
-      window.location.hostname !== '127.0.0.1' &&
-      !window.location.hostname.startsWith('192.168.')) {
-    return '/api';
-  }
-
-  return 'http://127.0.0.1:8000';
+    const envUrl = (import.meta as any).env?.VITE_API_URL;
+    if (envUrl) return envUrl;
+    
+    if (typeof window !== 'undefined') {
+        const hostname = window.location.hostname;
+        if (hostname !== 'localhost' && 
+            hostname !== '127.0.0.1' &&
+            !hostname.startsWith('192.168.') &&
+            !hostname.startsWith('10.') &&
+            !hostname.startsWith('172.')) {
+            return '/api';
+        }
+    }
+    return 'http://127.0.0.1:8000';
 };
 
 const API_URL = getApiUrl();

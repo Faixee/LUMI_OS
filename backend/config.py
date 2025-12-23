@@ -10,6 +10,14 @@ class Settings:
     REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
     DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost/lumios_db")
     CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:8000,http://localhost:8000,https://lumi-os-omega.vercel.app").split(",")
+    
+    # In non-production, be more permissive with CORS if needed
+    if os.getenv("ENVIRONMENT") != "production":
+        # Add common dev ports if not present
+        dev_ports = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "http://127.0.0.1:3000"]
+        for port in dev_ports:
+            if port not in CORS_ORIGINS:
+                CORS_ORIGINS.append(port)
     SECURITY_HEADERS = {
         "X-Frame-Options": "DENY",
         "X-Content-Type-Options": "nosniff",

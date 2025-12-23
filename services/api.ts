@@ -7,11 +7,16 @@ const getApiUrl = () => {
   const envUrl = (import.meta as any).env?.VITE_API_URL;
   if (envUrl) return envUrl;
   
-  if (typeof window !== 'undefined' && 
-      window.location.hostname !== 'localhost' && 
-      window.location.hostname !== '127.0.0.1' &&
-      !window.location.hostname.startsWith('192.168.')) {
-    return '/api';
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    // If we're not on localhost/private IP, use relative path for Vercel/Production
+    if (hostname !== 'localhost' && 
+        hostname !== '127.0.0.1' &&
+        !hostname.startsWith('192.168.') &&
+        !hostname.startsWith('10.') &&
+        !hostname.startsWith('172.')) {
+      return '/api';
+    }
   }
   
   return 'http://127.0.0.1:8000';
@@ -210,16 +215,24 @@ export const api = {
   },
 
   sendLandingChat: async (prompt: string, history: { role: string, content: string }[] = [], language: string = 'en') => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+      
       try {
           const url = `${API_URL}/ai/landing-chat`;
-          console.log(`[LUMIX] Sending landing chat to: ${url}`);
+          console.log(`[LUMIX] Sending landing chat to: ${url} (Origin: ${typeof window !== 'undefined' ? window.location.origin : 'unknown'})`);
           
           const res = await fetch(url, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ prompt, history, language })
+              headers: { 
+                  'Content-Type': 'application/json',
+                  'X-Requested-With': 'XMLHttpRequest'
+              },
+              body: JSON.stringify({ prompt, history, language }),
+              signal: controller.signal
           });
           
+          clearTimeout(timeoutId);
           const data = await res.json();
           if (!res.ok) {
               console.error(`[LUMIX] Landing chat error (${res.status}):`, data);
@@ -227,8 +240,18 @@ export const api = {
           }
           return data;
       } catch (e: any) {
+          clearTimeout(timeoutId);
           console.error("[LUMIX] Connection to NOVA core failed:", e);
-          return { response: `Connection to NOVA core failed. (Reason: ${e.message || 'Network Error'})` };
+          
+          // Detect if it's a browser-level block (like Mixed Content or PNA)
+          let reason = e.message || 'Network Error';
+          if (e.name === 'AbortError') {
+              reason = 'Request timed out (30s).';
+          } else if (reason === 'Failed to fetch' && typeof window !== 'undefined' && window.location.protocol === 'https:' && API_URL.startsWith('http:')) {
+              reason = 'Insecure Connection Blocked (Mixed Content). Use HTTPS for backend or visit via HTTP.';
+          }
+          
+          return { response: `Connection to NOVA core failed. (Reason: ${reason})` };
       }
   },
 

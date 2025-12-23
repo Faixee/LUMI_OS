@@ -89,9 +89,8 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # ----------------------------
 # SECURITY MIDDLEWARE
 # ----------------------------
-# Force HTTPS in production
-if settings.ENVIRONMENT == "production":
-    app.add_middleware(HTTPSRedirectMiddleware)
+# NOTE: Vercel/Cloudflare handles HTTPS redirection at the edge. 
+# Internal HTTPS redirection can cause issues on serverless platforms.
 
 # Add security headers to all responses
 app.middleware("http")(add_security_headers)
@@ -226,15 +225,22 @@ async def preflight(path: str, request: Request):
     Fixes CORS 400 Bad Request caused by SlowAPI blocking OPTIONS requests
     and adds support for Private Network Access (PNA).
     """
-    response = JSONResponse(content={})
     origin = request.headers.get("origin")
+    
+    # Return 204 No Content for preflight success
+    response = Response(status_code=204)
+    
     if origin:
         response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-Requested-With, X-Internal-Dev-Secret"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
+    else:
+        response.headers["Access-Control-Allow-Origin"] = "*"
         
-    # Support for Chrome's Private Network Access security feature
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-Requested-With, X-Internal-Dev-Secret, X-Request-ID"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Max-Age"] = "86400"
+        
+    # Support for Chrome/Edge Private Network Access security feature
     if request.headers.get("Access-Control-Request-Private-Network") == "true":
         response.headers["Access-Control-Allow-Private-Network"] = "true"
         
