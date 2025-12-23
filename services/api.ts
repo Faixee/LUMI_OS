@@ -4,12 +4,12 @@ import { authService } from './auth';
 
 // In production, this comes from the build environment. In dev, it falls back to localhost.
 const getApiUrl = () => {
-  const envUrl = (import.meta as any).env?.VITE_API_URL;
-  if (envUrl) return envUrl;
-  
+  // Check hostname first to avoid PNA blocks when on a public domain
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
-    // If we're not on localhost/private IP, use relative path for Vercel/Production
+    // If we are on Vercel or any public domain, we MUST use the relative /api path
+    // to talk to the Vercel-deployed backend. Talking to 127.0.0.1 from a public 
+    // HTTPS domain is blocked by browsers as "Private Network Access".
     if (hostname !== 'localhost' && 
         hostname !== '127.0.0.1' &&
         !hostname.startsWith('192.168.') &&
@@ -18,6 +18,9 @@ const getApiUrl = () => {
       return '/api';
     }
   }
+
+  const envUrl = (import.meta as any).env?.VITE_API_URL;
+  if (envUrl) return envUrl;
   
   return 'http://127.0.0.1:8000';
 };

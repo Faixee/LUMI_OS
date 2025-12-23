@@ -243,6 +243,13 @@ async def preflight(path: str, request: Request):
     # Support for Chrome/Edge Private Network Access security feature
     if request.headers.get("Access-Control-Request-Private-Network") == "true":
         response.headers["Access-Control-Allow-Private-Network"] = "true"
+        # Edge sometimes needs explicit origin/methods even in the PNA preflight
+        if origin:
+            response.headers["Access-Control-Allow-Origin"] = origin
+        else:
+            response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-Requested-With, X-Internal-Dev-Secret, X-Request-ID"
         
     return response
 
