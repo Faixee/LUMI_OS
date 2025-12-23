@@ -42,10 +42,11 @@ class Settings:
     DEVELOPER_EMAIL_ALLOWLIST = os.getenv("DEVELOPER_EMAIL_ALLOWLIST", "")
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     GEMINI_API_KEY = os.getenv("API_KEY", "")
+    IS_VERCEL = os.getenv("VERCEL") == "1"
 
 settings = Settings()
 
-if settings.ENVIRONMENT == "production":
+if settings.ENVIRONMENT == "production" and not settings.IS_VERCEL:
     if settings.SECRET_KEY in ("your-super-secure-production-secret-key-change-this-immediately", "development-secret-key-not-for-production"):
         raise ValueError("SECRET_KEY must be changed for production")
     if "sqlite" in settings.DATABASE_URL:

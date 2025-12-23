@@ -9,8 +9,6 @@ if project_root not in sys.path:
 from backend.main import app
 
 # Configure FastAPI to handle the /api prefix when running on Vercel
-# This ensures that requests to /api/students/ are routed to /students/ in FastAPI
-# On Vercel, the path passed to the handler already includes /api if it was matched by the rewrite
 app.root_path = "/api"
 
 # Export the app for Vercel

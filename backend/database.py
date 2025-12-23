@@ -7,31 +7,34 @@ import urllib.parse
 # Database URL configuration
 # Using PostgreSQL by default in production, SQLite for local dev
 DATABASE_URL = os.getenv("DATABASE_URL", "")
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+IS_VERCEL = os.getenv("VERCEL") == "1"
 
 # Fix common mistake: Password containing '@' not being URL-encoded
 if DATABASE_URL.startswith("postgresql://") and DATABASE_URL.count("@") > 1:
-    # Try to fix it: split by last @ to find host, then split first part by : to find user/pass
     try:
         parts = DATABASE_URL.split("@")
         host_part = parts[-1]
         cred_part = "@".join(parts[:-1]) # everything before last @
         
-        # Now fix cred_part
         if ":" in cred_part:
             scheme_user, password = cred_part.rsplit(":", 1)
-            # URL encode only the password
             encoded_password = urllib.parse.quote_plus(password)
             DATABASE_URL = f"{scheme_user}:{encoded_password}@{host_part}"
     except Exception:
-        pass # If logic fails, fallback to original
+        pass
 
-if os.getenv("ENVIRONMENT") == "production":
+if ENVIRONMENT == "production" or (IS_VERCEL and DATABASE_URL.startswith("postgresql")):
     SQLALCHEMY_DATABASE_URL = DATABASE_URL or "postgresql://user:password@localhost/lumios_db"
 else:
-    SQLALCHEMY_DATABASE_URL = DATABASE_URL or "sqlite:///./data/apex.db"
+    # On Vercel, we MUST use /tmp for SQLite because the filesystem is read-only
+    if IS_VERCEL:
+        SQLALCHEMY_DATABASE_URL = "sqlite:////tmp/apex.db"
+    else:
+        SQLALCHEMY_DATABASE_URL = DATABASE_URL or "sqlite:///./data/apex.db"
 
-# Create data directory only if using SQLite
-if "sqlite" in SQLALCHEMY_DATABASE_URL:
+# Create data directory only if using SQLite and not on Vercel (where we use /tmp)
+if "sqlite" in SQLALCHEMY_DATABASE_URL and not IS_VERCEL:
     try:
         # Check if the path is relative or absolute
         if "sqlite:///" in SQLALCHEMY_DATABASE_URL:
