@@ -261,7 +261,12 @@ async def favicon():
 # ----------------------------
 # Only create tables if we're not in a migration-heavy production env
 # In true prod, we'd use Alembic
-models.Base.metadata.create_all(bind=database.engine)
+try:
+    models.Base.metadata.create_all(bind=database.engine)
+except Exception as e:
+    logger.error(f"Database initialization failed: {e}")
+    # We don't crash here because we want the health check to stay up
+    # and provide diagnostic info via logs.
 
 # PRODUCTION CHECK: Warn if using SQLite in production
 if settings.ENVIRONMENT == "production" and "sqlite" in str(database.engine.url):
