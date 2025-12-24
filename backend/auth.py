@@ -318,6 +318,28 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         raise credentials_exception
     return user
 
+from fastapi import Request
+
+async def get_token_optional(request: Request):
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        return auth_header[7:]
+    return None
+
+def get_current_user_optional(token: Optional[str] = Depends(get_token_optional), db: Session = Depends(database.get_db)):
+    """Optional version of get_current_user for guest access."""
+    if not token:
+        return None
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            return None
+        return db.query(models.User).filter(models.User.username == username).first()
+    except:
+        return None
+
 def get_current_active_user(current_user: models.User = Depends(get_current_user)):
     if getattr(current_user, "is_suspended", False):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account suspended")

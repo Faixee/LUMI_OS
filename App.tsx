@@ -63,8 +63,8 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     const isDev = ['developer', 'owner', 'admin'].includes(role) || role === 'demo';
     
     if (!isPaid && !isDev) {
-        // If authenticated but not paid, redirect to login which will show Access Denied
-        return <Navigate to="/login" replace />;
+        // If authenticated but not paid, redirect to subscription page
+        return <Navigate to="/subscribe" replace />;
     }
     
     return <>{children}</>;
@@ -97,25 +97,7 @@ const LandingPageWrapper = () => {
 // Wrapper for LoginView
 const LoginViewWrapper = () => {
     const navigate = useNavigate();
-    const user = authService.getUser();
-
-    React.useEffect(() => {
-        const token = user.token;
-        const isValidToken = token && token !== 'null' && token !== 'undefined' && token.length > 0;
-
-        if (isValidToken) {
-            const subscription = (user.subscription || '').toLowerCase().trim();
-            const role = (user.role || '').toLowerCase().trim();
-            const isPaid = ['active', 'enterprise', 'pro', 'basic', 'demo'].includes(subscription);
-            const isDev = ['developer', 'owner', 'admin'].includes(role) || role === 'demo';
-            
-            if (isPaid || isDev) {
-                navigate('/app', { replace: true });
-            }
-        }
-    }, [user.token, user.subscription, user.role, navigate]);
-    
-    return <LoginView onLoginSuccess={(role, name) => navigate('/app')} onBack={() => navigate('/')} />;
+    return <LoginView onLoginSuccess={() => navigate('/app')} onBack={() => navigate('/')} />;
 };
 
 const App: React.FC = () => {

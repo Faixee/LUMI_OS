@@ -37,8 +37,15 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack }) => {
   const [loginState, setLoginState] = useState<'idle' | 'authenticating' | 'denied' | 'granted' | 'welcome'>('idle');
   const [authData, setAuthData] = useState<any>(null);
 
-  // Check for existing session on mount
+  // Check for existing session and lock page on mount
   useEffect(() => {
+    // Lock the login page unless accessed via System Login
+    const allowAccess = sessionStorage.getItem('allow_login_access');
+    if (!allowAccess) {
+      navigate('/', { replace: true });
+      return;
+    }
+
     const user = authService.getUser();
     if (user.token && user.token !== 'null' && user.token !== 'undefined') {
         const subStatus = (user.subscription || 'free').toLowerCase();
@@ -48,9 +55,12 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack }) => {
         
         if (!isPaid && !isDev) {
             setLoginState('denied');
+            setTimeout(() => {
+                navigate('/subscribe');
+            }, 3000);
         }
     }
-  }, []);
+  }, [navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -232,8 +242,8 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack }) => {
                         
                         <div className="space-y-3">
                             <h2 className="text-3xl font-bold text-white font-sci-fi tracking-widest uppercase">Access Denied</h2>
-                            <p className="text-slate-400 text-sm font-mono leading-relaxed">
-                                This system is available only to active subscribers.
+                            <p className="text-rose-400 text-sm font-mono leading-relaxed font-bold">
+                                Get subscription first to execute to the Lumix.
                             </p>
                         </div>
 

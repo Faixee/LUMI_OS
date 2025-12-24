@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Users, Activity, Cpu, Radio, School, DollarSign, BookOpen, GraduationCap, Calendar, Bell, Database, Bus, Library, Settings, Brain, Shield, X } from 'lucide-react';
+import { LayoutDashboard, Users, Activity, Cpu, Radio, School, DollarSign, BookOpen, GraduationCap, Calendar, Bell, Database, Bus, Library, Settings, Brain, Shield, X, LogOut } from 'lucide-react';
 import { UserRole, SchoolConfig } from '../types';
 
 interface SidebarProps {
@@ -10,10 +10,11 @@ interface SidebarProps {
   schoolConfig?: SchoolConfig | null;
   isOpen: boolean;
   onClose: () => void;
+  onLogout: () => void;
   isDemo?: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, userRole, schoolConfig, isOpen, onClose, isDemo }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, userRole, schoolConfig, isOpen, onClose, onLogout, isDemo }) => {
   
   const getMenuItems = () => {
     let items = [];
@@ -211,13 +212,21 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, userRole, 
           })}
         </nav>
 
-        {/* Footer Info */}
-        <div className="p-4 bg-black/40 backdrop-blur-md border-t border-white/5 shrink-0">
+        {/* Footer Info & Logout */}
+        <div className="p-4 bg-black/40 backdrop-blur-md border-t border-white/5 shrink-0 space-y-3">
           <div className="flex items-center gap-3 text-cyan-500/80 text-[10px] font-mono bg-cyan-950/20 border border-cyan-500/20 p-2 rounded-lg">
             <Radio size={12} className="animate-pulse" />
             <span className="tracking-widest flex-1">NET: SECURE</span>
             <span className="opacity-50">50ms</span>
           </div>
+
+          <button
+            onClick={onLogout}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all duration-300 font-sci-fi tracking-widest text-xs group"
+          >
+            <LogOut size={18} className="group-hover:rotate-12 transition-transform" />
+            SYSTEM LOGOUT
+          </button>
         </div>
       </aside>
     </>

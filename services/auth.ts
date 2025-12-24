@@ -97,6 +97,7 @@ export const authService = {
     },
 
     logout: () => {
+        sessionStorage.removeItem('allow_login_access');
         const prefix = 'lumix_demo_ai_quota:';
         try {
             for (let i = sessionStorage.length - 1; i >= 0; i--) {

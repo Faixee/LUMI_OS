@@ -17,12 +17,33 @@ except ImportError:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ai_service")
 
+class SimpleCache:
+    def __init__(self, ttl: int = 3600): # 1 hour TTL
+        self.cache = {}
+        self.ttl = ttl
+
+    def get(self, key: str) -> Optional[Any]:
+        if key in self.cache:
+            entry = self.cache[key]
+            if time.time() - entry['timestamp'] < self.ttl:
+                return entry['value']
+            else:
+                del self.cache[key]
+        return None
+
+    def set(self, key: str, value: Any):
+        self.cache[key] = {
+            'value': value,
+            'timestamp': time.time()
+        }
+
 class AIService:
     def __init__(self, openai_api_key: str, gemini_api_key: str):
         self.client = OpenAI(api_key=openai_api_key) if openai_api_key else None
         self.openai_model = "gpt-4-turbo-preview" 
         self.model = "gpt-4-turbo-preview" # Ensure this is ALWAYS set
         self.gemini_available = False
+        self.cache = SimpleCache() # Initialize cache
         if gemini_api_key and genai:
             try:
                 genai.configure(api_key=gemini_api_key)
@@ -95,6 +116,132 @@ class AIService:
         except Exception as e:
             logger.error(f"Gemini Vision Error: {e}")
             return {"error": f"Failed to process image: {str(e)}"}
+
+    async def generate_syllabus(self, topic: str, grade: str, weeks: int) -> List[Dict[str, Any]]:
+        """Generate a structured syllabus using Gemini."""
+        cache_key = f"syllabus:{topic}:{grade}:{weeks}"
+        cached = self.cache.get(cache_key)
+        if cached:
+            logger.info(f"Cache hit for {cache_key}")
+            return cached
+
+        if not self.gemini_available or not self.vision_model:
+            return []
+
+        prompt = f"""
+        Create a {weeks}-week academic syllabus for the topic "{topic}" tailored for Grade {grade}.
+        
+        RETURN ONLY A JSON ARRAY of objects with this structure:
+        [
+            {{
+                "week": 1,
+                "topic": "Intro to {topic}",
+                "details": "Basic concepts and definitions...",
+                "activity": "Group discussion and quiz"
+            }}
+        ]
+        
+        Rules:
+        1. Weeks must be exactly {weeks}.
+        2. Content must be age-appropriate for Grade {grade}.
+        3. Return ONLY raw JSON. No markdown blocks.
+        """
+
+        try:
+            response = await self.vision_model.generate_content_async(prompt)
+            text = response.text
+            result = self._parse_json(text)
+            if result:
+                self.cache.set(cache_key, result)
+            return result
+        except Exception as e:
+            logger.error(f"Syllabus Gen Error: {e}")
+            return []
+
+    async def generate_flashcards(self, topic: str, count: int = 10) -> List[Dict[str, Any]]:
+        """Generate flashcards for a topic."""
+        cache_key = f"flashcards:{topic}:{count}"
+        cached = self.cache.get(cache_key)
+        if cached:
+            logger.info(f"Cache hit for {cache_key}")
+            return cached
+
+        if not self.gemini_available or not self.vision_model:
+            return []
+
+        prompt = f"""
+        Generate {count} educational flashcards for the topic "{topic}".
+        
+        RETURN ONLY A JSON ARRAY of objects with this structure:
+        [
+            {{
+                "term": "Concept Name",
+                "def": "Clear and concise definition..."
+            }}
+        ]
+        
+        Return ONLY raw JSON.
+        """
+
+        try:
+            response = await self.vision_model.generate_content_async(prompt)
+            result = self._parse_json(response.text)
+            if result:
+                self.cache.set(cache_key, result)
+            return result
+        except Exception as e:
+            logger.error(f"Flashcard Gen Error: {e}")
+            return []
+
+    async def generate_quiz(self, topic: str, count: int = 5) -> List[Dict[str, Any]]:
+        """Generate a multiple choice quiz."""
+        cache_key = f"quiz:{topic}:{count}"
+        cached = self.cache.get(cache_key)
+        if cached:
+            logger.info(f"Cache hit for {cache_key}")
+            return cached
+
+        if not self.gemini_available or not self.vision_model:
+            return []
+
+        prompt = f"""
+        Create a {count}-question multiple choice quiz about "{topic}".
+        
+        RETURN ONLY A JSON ARRAY of objects with this structure:
+        [
+            {{
+                "q": "Question text?",
+                "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
+                "correct": 0
+            }}
+        ]
+        
+        Note: 'correct' is the index (0-3) of the right answer.
+        Return ONLY raw JSON.
+        """
+
+        try:
+            response = await self.vision_model.generate_content_async(prompt)
+            result = self._parse_json(response.text)
+            if result:
+                self.cache.set(cache_key, result)
+            return result
+        except Exception as e:
+            logger.error(f"Quiz Gen Error: {e}")
+            return []
+
+    def _parse_json(self, text: str) -> Any:
+        """Helper to parse JSON from AI response, cleaning up markdown if needed."""
+        try:
+            clean_text = text.strip()
+            if "```json" in clean_text:
+                clean_text = clean_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in clean_text:
+                clean_text = clean_text.split("```")[1].split("```")[0].strip()
+            return json.loads(clean_text)
+        except Exception as e:
+            logger.error(f"JSON Parse Error: {e} | Raw: {text[:100]}...")
+            return None
 
     async def generate_landing_chat_response(self, prompt: str, history: List[Dict[str, str]] = [], language: str = "en") -> Dict[str, Any]:
         """

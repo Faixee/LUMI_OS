@@ -25,7 +25,7 @@ services:
       - DATABASE_URL=postgresql://lumios_user:lumios_password@db:5432/lumios_db
       - ENVIRONMENT=production
       - SECRET_KEY=${SECRET_KEY}
-      - CORS_ORIGINS=http://localhost,http://localhost:3000,http://localhost:3001
+      - CORS_ORIGINS=http://localhost,http://localhost:3000,http://127.0.0.1:3000
     depends_on:
       db:
         condition: service_healthy

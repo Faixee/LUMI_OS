@@ -36,3 +36,54 @@ export const MOCK_LIBRARY: LibraryBook[] = [
   { id: 'b1', title: 'The Neuromancer', author: 'William Gibson', status: 'Available', category: 'Sci-Fi' },
   { id: 'b2', title: 'Dune', author: 'Frank Herbert', status: 'Checked Out', category: 'Sci-Fi' },
 ];
+
+export const SUBJECT_SUGGESTIONS = [
+  // Science
+  "Quantum Mechanics",
+  "Photosynthesis",
+  "Organic Chemistry",
+  "Astrophysics",
+  "Plate Tectonics",
+  "Human Anatomy",
+  "Genetics & DNA",
+  "Electromagnetism",
+  "Thermodynamics",
+  "Marine Biology",
+  
+  // Mathematics
+  "Calculus: Integrals",
+  "Linear Algebra",
+  "Statistics & Probability",
+  "Trigonometry",
+  "Number Theory",
+  "Differential Equations",
+  
+  // Technology & CS
+  "Artificial Intelligence",
+  "Blockchain Technology",
+  "Cybersecurity Basics",
+  "Python Programming",
+  "Web Development",
+  "Cloud Computing",
+  "Machine Learning",
+  "Data Structures",
+  
+  // Humanities & History
+  "World War II",
+  "The Renaissance",
+  "Ancient Egypt",
+  "Microeconomics",
+  "Macroeconomics",
+  "Political Science",
+  "World Religions",
+  "Modern Literature",
+  "Philosophy 101",
+  "Social Psychology",
+  
+  // Arts & Others
+  "Music Theory",
+  "Art History",
+  "Digital Marketing",
+  "Entrepreneurship",
+  "Creative Writing"
+];

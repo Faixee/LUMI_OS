@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Cpu, Shield, Globe, ArrowRight, CheckCircle2, Scan, Lock, Users, Server, Database, Activity, Code, Folder, FileCode, Layers, Box, Aperture, Terminal, Zap, Power, MousePointer2, XCircle, Layout, Gamepad2 } from 'lucide-react';
+import { ChevronRight, Cpu, Shield, Globe, ArrowRight, CheckCircle2, Scan, Lock, Unlock, Users, Server, Database, Activity, Code, Folder, FileCode, Layers, Box, Aperture, Terminal, Zap, Power, MousePointer2, XCircle, Layout, Gamepad2, Sparkles, Eye } from 'lucide-react';
 import LandingChatBot from './LandingChatBot';
 import { authService } from '../services/auth';
 import LandingNav from './landing/LandingNav';
@@ -96,14 +96,15 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateLogin }) => {
   const [isPaywallOpen, setIsPaywallOpen] = useState(false);
   const [isDemoSelectorOpen, setIsDemoSelectorOpen] = useState(false);
   const [footerModalType, setFooterModalType] = useState<'privacy' | 'status' | 'license' | null>(null);
+  const [loginState, setLoginState] = useState<'idle' | 'denied' | 'granted' | 'welcome'>('idle');
   
   // Dynamic Slogan State
   const [sloganIndex, setSloganIndex] = useState(0);
   const slogans = [
-      "BEYOND_MANAGEMENT",
-      "PREDICT_THE_FUTURE",
-      "AUTONOMOUS_CORE",
-      "OUTCLASS_LEGACY"
+      "COGNITIVE_ECONOMY",
+      "PREDICTIVE_ALPHA",
+      "GENERATIVE_FUTURE",
+      "INVEST_IN_INTELLECT"
   ];
 
   useEffect(() => {
@@ -136,21 +137,47 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateLogin }) => {
     // Check if token is valid (not 'null', 'undefined', or empty)
     const isValidToken = token && token !== 'null' && token !== 'undefined' && token.length > 0;
 
+    // Set a flag to allow login page access only via System Login
+    sessionStorage.setItem('allow_login_access', 'true');
+
+    // Filter out developer roles from system login
+    const role = (user.role || '').toLowerCase().trim();
+    if (role === 'developer') {
+        navigate('/dev');
+        return;
+    }
+
     if (isValidToken) {
       const subscription = (user.subscription || '').toLowerCase().trim();
-      const role = (user.role || '').toLowerCase().trim();
       
       const isPaid = ['active', 'enterprise', 'pro', 'basic', 'demo'].includes(subscription);
-      const isDev = ['developer', 'owner', 'admin'].includes(role) || role === 'demo';
+      const isDev = ['owner', 'admin'].includes(role) || role === 'demo';
       
       if (isPaid || isDev) {
-        navigate('/app');
+        setLoginState('granted');
+        setTimeout(() => {
+            setLoginState('welcome');
+        }, 1500);
+        setTimeout(() => {
+            navigate('/app');
+        }, 4000);
       } else {
-        // If logged in but not paid, send to login so it shows the Access Denied modal
-        navigate('/login');
+        setLoginState('denied');
+        setTimeout(() => {
+            if (loginState === 'denied') { // Check if still denied
+                setLoginState('idle');
+                navigate('/subscribe');
+            }
+        }, 3000);
       }
     } else {
-      onNavigateLogin();
+      // If not logged in, also show access denied and redirect to pricing
+      // as per user request: "system login... instantly triggers to pricing page"
+      setLoginState('denied');
+      setTimeout(() => {
+          setLoginState('idle');
+          navigate('/subscribe');
+      }, 3000);
     }
   };
 
@@ -754,61 +781,97 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateLogin }) => {
              </div>
         </section>
 
-        {/* TECHNICAL BLUEPRINT (Developer View) */}
-        <section id="specs" className="py-16 md:py-24 px-4 md:px-6 relative border-t border-white/5 bg-[#050508]">
-            <div className="max-w-7xl mx-auto">
-                <div className="flex items-center justify-between mb-8 md:mb-12">
-                     <div>
-                        <h2 className="text-2xl md:text-3xl font-bold font-sci-fi text-white mb-2">SYSTEM BLUEPRINT</h2>
-                        <p className="text-slate-400 text-xs md:text-sm font-mono">Developer Access: GRANTED</p>
-                     </div>
-                     <div className="hidden md:flex gap-2">
-                        <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                        <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                     </div>
-                </div>
+        {/* NEURAL CORE - INTERACTIVE AI VISUALIZATION */}
+        <section id="specs" className="py-16 md:py-24 px-4 md:px-6 relative border-t border-white/5 bg-[#050508] overflow-hidden">
+            {/* Background elements */}
+            <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-500/10 rounded-full blur-[120px] animate-pulse"></div>
+            </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Visual File Tree */}
-                    <div className="bg-[#0a0a10] rounded-lg border border-white/10 overflow-hidden flex flex-col h-[400px] md:h-[500px] shadow-2xl relative group">
-                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-cyan-500 to-indigo-500"></div>
-                        <div className="p-3 bg-white/5 border-b border-white/5 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <Terminal size={14} className="text-slate-500" />
-                                <span className="text-xs font-mono text-slate-400">project_root/</span>
+            <div className="max-w-7xl mx-auto relative z-10">
+                <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
+                    {/* Left: Interactive Neural Core Visualization */}
+                    <div className="w-full lg:w-1/2 order-2 lg:order-1">
+                        <div className="relative aspect-square max-w-[500px] mx-auto group">
+                            {/* Outer Ring */}
+                            <div className="absolute inset-0 border border-indigo-500/20 rounded-full animate-[spin_20s_linear_infinite]"></div>
+                            <div className="absolute inset-4 border border-cyan-500/10 rounded-full animate-[spin_15s_linear_infinite_reverse]"></div>
+                            
+                            {/* Core Hexagon */}
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <div className="w-48 h-48 relative animate-float">
+                                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-cyan-500/20 backdrop-blur-3xl rounded-2xl rotate-45 border border-white/10 group-hover:scale-110 transition-transform duration-700"></div>
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <div className="w-32 h-32 relative">
+                                            <div className="absolute inset-0 bg-indigo-500/40 rounded-full blur-2xl animate-pulse"></div>
+                                            <Cpu size={64} className="text-white relative z-10 drop-shadow-[0_0_20px_rgba(255,255,255,0.5)]" />
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Data Particles */}
+                                    {[...Array(6)].map((_, i) => (
+                                        <div 
+                                            key={i}
+                                            className="absolute w-2 h-2 bg-cyan-400 rounded-full animate-ping"
+                                            style={{
+                                                top: `${50 + 40 * Math.sin(i * Math.PI / 3)}%`,
+                                                left: `${50 + 40 * Math.cos(i * Math.PI / 3)}%`,
+                                                animationDelay: `${i * 0.5}s`,
+                                                animationDuration: '3s'
+                                            }}
+                                        ></div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Floating Tech Labels */}
+                            <div className="absolute top-0 right-0 p-4 glass-panel border border-cyan-500/30 rounded-lg animate-bounce-slow">
+                                <div className="text-[10px] font-mono text-cyan-400 mb-1 tracking-widest uppercase">Cognitive Processing</div>
+                                <div className="text-sm font-bold text-white font-sci-fi">99.9% ACCURACY</div>
+                            </div>
+                            <div className="absolute bottom-10 left-0 p-4 glass-panel border border-indigo-500/30 rounded-lg animate-bounce-slow delay-700">
+                                <div className="text-[10px] font-mono text-indigo-400 mb-1 tracking-widest uppercase">Neural Latency</div>
+                                <div className="text-sm font-bold text-white font-sci-fi">{'<'} 15MS RESPONSE</div>
                             </div>
                         </div>
-                        <div className="flex-1 p-4 md:p-6 overflow-y-auto custom-scrollbar font-mono text-sm">
-                            {renderTree(projectStructure)}
-                        </div>
-                        {/* Overlay Scanline */}
-                        <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] z-10 bg-[length:100%_2px,3px_100%] opacity-10 pointer-events-none"></div>
                     </div>
 
-                    {/* Tech Stack Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 h-fit">
-                        {[
-                            { title: "FRONTEND CORE", icon: Code, color: "text-cyan-400", bg: "bg-cyan-950/30", border: "border-cyan-500/30", specs: ["React 18 + TypeScript", "Tailwind CSS", "Recharts Visualization", "Lucide Vector Icons"] },
-                            { title: "AI ENGINE", icon: Zap, color: "text-indigo-400", bg: "bg-indigo-950/30", border: "border-indigo-500/30", specs: ["Google Gemini 1.5 Flash", "Neural Embeddings", "Context-Aware Agents", "Real-time Inference"] },
-                            { title: "BACKEND LINK", icon: Server, color: "text-emerald-400", bg: "bg-emerald-950/30", border: "border-emerald-500/30", specs: ["FastAPI (Python)", "PostgreSQL / Supabase", "RESTful Architecture", "JWT Authentication"] },
-                            { title: "SECURITY", icon: Shield, color: "text-purple-400", bg: "bg-purple-950/30", border: "border-purple-500/30", specs: ["RBAC Access Control", "AES-256 Encryption", "Ethical Guardrails", "Automated Auditing"] }
-                        ].map((stack, i) => (
-                            <div key={i} className={`p-4 md:p-6 rounded-lg border ${stack.border} ${stack.bg} hover:brightness-125 transition-all`}>
-                                <div className="flex items-center gap-3 mb-4">
-                                    <stack.icon size={20} className={stack.color} />
-                                    <h3 className="font-bold text-white font-sci-fi text-sm">{stack.title}</h3>
-                                </div>
-                                <ul className="space-y-2">
-                                    {stack.specs.map((spec, j) => (
-                                        <li key={j} className="text-[10px] md:text-xs text-slate-400 font-mono flex items-center gap-2">
-                                            <span className={`w-1 h-1 rounded-full ${stack.color.replace('text', 'bg')}`}></span>
-                                            {spec}
-                                        </li>
-                                    ))}
-                                </ul>
+                    {/* Right: Persuasion Content */}
+                    <div className="w-full lg:w-1/2 order-1 lg:order-2 space-y-8">
+                        <div>
+                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 mb-4">
+                                <Zap size={14} className="text-indigo-400" />
+                                <span className="text-[10px] font-mono text-indigo-300 uppercase tracking-[0.2em]">The Lumix Secret</span>
                             </div>
-                        ))}
+                            <h2 className="text-4xl md:text-6xl font-bold font-sci-fi text-white leading-tight">
+                                BEYOND THE <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">NEURAL CORE</span>
+                            </h2>
+                            <p className="text-slate-400 text-lg leading-relaxed mt-6">
+                                We don't just process data; we orchestrate intelligence. LumiX is powered by a proprietary agent swarm that thinks, adapts, and evolves with your institution.
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            {[
+                                { title: "Cognitive Synthesis", desc: "Our agents analyze patterns invisible to standard software.", icon: Aperture },
+                                { title: "Quantum Security", desc: "Military-grade encryption protecting every byte of data.", icon: Shield },
+                                { title: "Autonomous Growth", desc: "The system learns your workflows and automates them.", icon: Activity },
+                                { title: "Vision AI Integration", desc: "Advanced image recognition for automated physical tasks.", icon: Eye }
+                            ].map((item, i) => (
+                                <div key={i} className="group p-6 rounded-2xl bg-white/5 border border-white/10 hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all duration-500">
+                                    <item.icon size={24} className="text-indigo-400 mb-4 group-hover:scale-110 transition-transform" />
+                                    <h3 className="font-bold text-white font-sci-fi text-sm mb-2">{item.title}</h3>
+                                    <p className="text-xs text-slate-500 leading-relaxed">{item.desc}</p>
+                                </div>
+                            ))}
+                        </div>
+
+                        <button 
+                            onClick={() => scrollToSection('demo')}
+                            className="px-8 py-4 bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white rounded-none font-bold font-sci-fi tracking-widest shadow-[0_0_30px_rgba(79,70,229,0.3)] transition-all flex items-center gap-3 group clip-path-slant"
+                        >
+                            UNLEASH THE POWER <ArrowRight size={20} className="group-hover:translate-x-2 transition-transform" />
+                        </button>
                     </div>
                 </div>
             </div>
@@ -971,6 +1034,104 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateLogin }) => {
             type={footerModalType}
             onClose={() => setFooterModalType(null)}
         />
+
+        {/* Login Status Modals */}
+        {loginState === 'welcome' && (
+            <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/20 via-black to-cyan-900/20 animate-pulse" />
+                <div className="relative z-10 text-center space-y-8 animate-welcome">
+                    <div className="relative inline-block">
+                        <div className="w-32 h-32 md:w-40 md:h-40 bg-indigo-500/10 rounded-full flex items-center justify-center border border-indigo-500/30 shadow-[0_0_50px_rgba(79,70,229,0.3)]">
+                            <Sparkles size={60} className="text-cyan-400 animate-pulse" />
+                        </div>
+                        <div className="absolute -inset-4 bg-cyan-500/20 rounded-full blur-2xl animate-pulse" />
+                    </div>
+                    
+                    <div className="space-y-4">
+                        <h1 className="text-4xl md:text-6xl font-bold text-white font-sci-fi tracking-[0.2em] text-glow-animate">
+                            WELCOME TO LUMIX
+                        </h1>
+                        <p className="text-cyan-400/60 font-mono text-sm md:text-base tracking-[0.5em] uppercase animate-in slide-in-from-bottom-4 duration-1000 delay-300">
+                            System Core Initialized
+                        </p>
+                    </div>
+
+                    <div className="flex flex-col items-center gap-4 mt-12">
+                        <div className="w-64 h-1 bg-white/5 rounded-full overflow-hidden">
+                            <div className="h-full bg-gradient-to-r from-indigo-500 to-cyan-500 animate-[loading_3s_ease-in-out_forwards]" />
+                        </div>
+                        <span className="text-[10px] font-mono text-slate-500 tracking-widest animate-pulse uppercase">
+                            Loading secure environment...
+                        </span>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {loginState === 'denied' && (
+            <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4 animate-in fade-in duration-500">
+                <div className="glass-panel max-w-md w-full p-10 rounded-[2rem] border border-rose-500/30 shadow-[0_0_100px_rgba(244,63,94,0.15)] text-center space-y-8 animate-lock-shake relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-rose-500/50 to-transparent" />
+                    
+                    <div className="w-24 h-24 bg-rose-500/10 rounded-3xl mx-auto flex items-center justify-center border border-rose-500/30 shadow-[0_0_30px_rgba(244,63,94,0.2)] animate-float">
+                        <Lock size={48} className="text-rose-500" />
+                    </div>
+                    
+                    <div className="space-y-3">
+                        <h2 className="text-3xl font-bold text-white font-sci-fi tracking-widest uppercase">Access Denied</h2>
+                        <p className="text-rose-400 text-sm font-mono leading-relaxed font-bold">
+                            Get subscription first to execute to the Lumix.
+                        </p>
+                    </div>
+
+                    <div className="flex flex-col items-center gap-4 pt-4">
+                        <div className="flex gap-1">
+                            {[1, 2, 3].map(i => (
+                                <div key={i} className="w-2 h-2 bg-rose-500 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.1}s` }} />
+                            ))}
+                        </div>
+                        <span className="text-[10px] font-mono text-rose-500/40 tracking-[0.4em] uppercase mb-4">Redirecting to Pricing...</span>
+                        
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setLoginState('idle');
+                                onNavigateLogin();
+                            }}
+                            className="px-6 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-[10px] font-mono text-white transition-all uppercase tracking-widest"
+                        >
+                            Already have access? Login
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {loginState === 'granted' && (
+            <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-emerald-500/5 backdrop-blur-md animate-in fade-in duration-500">
+                <div className="glass-panel max-w-md w-full p-10 rounded-[2rem] border border-emerald-500/30 shadow-[0_0_100px_rgba(16,185,129,0.15)] text-center space-y-8 animate-unlock">
+                    <div className="w-24 h-24 bg-emerald-500/10 rounded-3xl mx-auto flex items-center justify-center border border-emerald-500/30 shadow-[0_0_30px_rgba(16,185,129,0.2)]">
+                        <Unlock size={48} className="text-emerald-400" />
+                    </div>
+                    
+                    <div className="space-y-3">
+                        <h2 className="text-3xl font-bold text-white font-sci-fi tracking-widest uppercase text-glow">Access Granted</h2>
+                        <p className="text-emerald-400/60 text-xs font-mono tracking-[0.2em] uppercase">
+                            Identity Verified • Subscription Active
+                        </p>
+                    </div>
+
+                    <div className="flex flex-col items-center gap-4 pt-4">
+                        <div className="flex gap-1">
+                            {[1, 2, 3].map(i => (
+                                <div key={i} className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.1}s` }} />
+                            ))}
+                        </div>
+                        <span className="text-[10px] font-mono text-emerald-500/40 tracking-[0.4em] uppercase">Initialising Core...</span>
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };

@@ -31,6 +31,9 @@ logger.setLevel(logging.INFO if settings.ENVIRONMENT == "production" else loggin
 
 from backend import models, schemas, database, auth
 from backend.ai_service import ai_service
+from backend.crawler_service import CrawlerService
+
+crawler_service = CrawlerService(ai_service)
 
 from backend.security import add_security_headers, validate_request_size, validate_csrf_token, sanitize_input, validate_email, validate_password_strength, validate_username
 import hashlib
@@ -840,8 +843,8 @@ def subscribe(sub: schemas.SubscriptionUpdate, db: Session = Depends(get_db), cu
 
 @app.post("/billing/checkout", response_model=schemas.CheckoutResponse)
 @limiter.limit("20/minute")
-def billing_checkout(req: schemas.CheckoutRequest, request: Request, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
-    if (getattr(current_user, "role", "") or "").lower() == "demo":
+def billing_checkout(req: schemas.CheckoutRequest, request: Request, db: Session = Depends(get_db), current_user: Optional[models.User] = Depends(auth.get_current_user_optional)):
+    if current_user and (getattr(current_user, "role", "") or "").lower() == "demo":
         raise HTTPException(status_code=403, detail="Demo sessions cannot start billing checkout")
 
     plan = auth.normalize_plan(req.plan)
@@ -866,13 +869,23 @@ def billing_checkout(req: schemas.CheckoutRequest, request: Request, db: Session
         raise HTTPException(status_code=500, detail="Price not configured")
 
     stripe.api_key = settings.STRIPE_SECRET_KEY
+    
+    # Metadata for tracking
+    metadata = {"plan": plan}
+    if current_user:
+        metadata["username"] = current_user.username
+        customer_email = current_user.profile.email if current_user.profile and current_user.profile.email else None
+    else:
+        customer_email = None
+
     checkout = stripe.checkout.Session.create(
         mode="subscription",
+        payment_method_types=["card"],
         line_items=[{"price": price_id, "quantity": 1}],
-        success_url=os.getenv("FRONTEND_URL", "http://localhost:3000") + "/app",
-        cancel_url=os.getenv("FRONTEND_URL", "http://localhost:3000") + "/subscribe",
-        customer_email=(current_user.profile.email if current_user.profile and current_user.profile.email else None),
-        metadata={"username": current_user.username, "plan": plan},
+        success_url=os.getenv("FRONTEND_URL", "http://127.0.0.1:3000") + "/app",
+        cancel_url=os.getenv("FRONTEND_URL", "http://127.0.0.1:3000") + "/subscribe",
+        customer_email=customer_email,
+        metadata=metadata,
     )
 
     return {"checkout_url": checkout.url}
@@ -1636,6 +1649,45 @@ async def ai_chat_proxy(req: schemas.ChatRequest, request: Request,
             db.rollback()
 
 
+# --- GENESIS ENGINE SPECIALIZED ROUTES ---
+
+@app.post("/ai/genesis/syllabus")
+@limiter.limit("5/minute")
+async def genesis_syllabus(req: schemas.GenesisSyllabusRequest, 
+                           request: Request,
+                           db: Session = Depends(get_db),
+                           current_user: models.User = Depends(allow_ai_chat)):
+    try:
+        data = await ai_service.generate_syllabus(req.topic, req.grade, req.weeks)
+        return {"response": json.dumps(data)}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+@app.post("/ai/genesis/flashcards")
+@limiter.limit("5/minute")
+async def genesis_flashcards(req: schemas.GenesisFlashcardsRequest, 
+                             request: Request,
+                             db: Session = Depends(get_db),
+                             current_user: models.User = Depends(allow_ai_chat)):
+    try:
+        data = await ai_service.generate_flashcards(req.topic, req.count)
+        return {"response": json.dumps(data)}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+@app.post("/ai/genesis/quiz")
+@limiter.limit("5/minute")
+async def genesis_quiz(req: schemas.GenesisQuizRequest, 
+                       request: Request,
+                       db: Session = Depends(get_db),
+                       current_user: models.User = Depends(allow_ai_chat)):
+    try:
+        data = await ai_service.generate_quiz(req.topic, req.count)
+        return {"response": json.dumps(data)}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
 @app.post("/ai/landing-chat", response_model=schemas.ChatResponse)
 @limiter.limit("10/minute")
 async def ai_landing_chat_proxy(req: schemas.ChatRequest, request: Request, db: Session = Depends(get_db)):
@@ -1677,6 +1729,24 @@ async def ai_landing_chat_proxy(req: schemas.ChatRequest, request: Request, db: 
     except Exception as e:
         logger.error(f"DEBUG LANDING CHAT ERROR: {e}")
         return {"response": "My neural link is currently unstable. Please try again later."}
+
+@app.post("/ai/crawler", response_model=schemas.CrawlerResponse)
+@limiter.limit("5/minute")
+async def school_crawler(req: schemas.CrawlerRequest, request: Request,
+                         db: Session = Depends(database.get_db),
+                         current_user: models.User = Depends(auth.get_current_user)):
+    """
+    Neural Web Crawler for School Websites.
+    Performs deep crawling and intelligent extraction of school data.
+    """
+    try:
+        # We use current_user to ensure only authenticated users can trigger this expensive operation
+        result = await crawler_service.crawl(req.url, req.max_depth)
+        return result
+    except Exception as e:
+        logger.error(f"Crawler endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/ai/predict")
 @limiter.limit("10/minute")
 async def ai_predict_proxy(student: schemas.StudentCreate, request: Request,

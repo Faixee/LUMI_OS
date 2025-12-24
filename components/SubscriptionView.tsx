@@ -9,12 +9,6 @@ const SubscriptionView: React.FC = () => {
   const [processing, setProcessing] = useState<string | null>(null);
 
   const handleSubscribe = async (planName: string) => {
-      const user = authService.getUser();
-      if (!user.token) {
-          navigate('/login');
-          return;
-      }
-      
       setProcessing(planName);
       try {
           const data = await api.billingCheckout(planName);

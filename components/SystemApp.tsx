@@ -402,7 +402,15 @@ const SystemApp: React.FC = () => {
         </div>
       )}
 
-      <Sidebar currentView={currentView} onChangeView={setCurrentView} userRole={userRole} schoolConfig={schoolConfig} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <Sidebar 
+        currentView={currentView} 
+        onChangeView={setCurrentView} 
+        userRole={userRole} 
+        schoolConfig={schoolConfig} 
+        isOpen={isSidebarOpen} 
+        onClose={() => setIsSidebarOpen(false)} 
+        onLogout={handleLogout}
+      />
 
       <main className={`flex-1 relative z-10 transition-all duration-300 flex flex-col ${isCockpit ? 'h-full overflow-hidden' : 'h-full overflow-y-auto overscroll-contain'} ${isSidebarOpen ? 'blur-sm md:blur-none' : ''} md:ml-72 min-w-0 p-4 md:p-8`}>
         {/* Developer God Mode Switcher */}

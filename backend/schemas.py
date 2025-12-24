@@ -94,6 +94,33 @@ class URLAnalysisRequest(BaseModel):
 class ChatResponse(BaseModel):
     response: str
 
+class GenesisSyllabusRequest(BaseModel):
+    topic: str
+    grade: str
+    weeks: int
+
+class GenesisFlashcardsRequest(BaseModel):
+    topic: str
+    count: int = 10
+
+class CrawlerRequest(BaseModel):
+    url: str
+    max_depth: Optional[int] = 2
+
+class CrawlerResponse(BaseModel):
+    school_name: str
+    designation: str # Primary target
+    motto: Optional[str] = None
+    educational_focus: Optional[str] = None
+    secondary_programs: Optional[List[str]] = []
+    other_info: Optional[Dict[str, Any]] = {}
+    status: str
+    errors: Optional[List[str]] = []
+
+class GenesisQuizRequest(BaseModel):
+    topic: str
+    count: int = 5
+
 class QuizRequest(BaseModel):
     topic: str
     difficulty: str

@@ -781,15 +781,15 @@ export const generateSyllabus = async (topic: string, grade: string, weeks: stri
         }));
     }
     try {
-        const res = await request('/ai/chat', {
-            prompt: `Create a ${weeks}-week syllabus for "${topic}" (Grade ${grade}). Return ONLY a valid JSON array with this structure: [{ "week": 1, "topic": "Title", "details": "Description", "activity": "Activity Name" }]. Do not include any text outside the JSON.`,
-            role: 'teacher',
-            context: 'You are a curriculum architect. Output strict JSON only.'
+        const res = await request('/ai/genesis/syllabus', {
+            topic,
+            grade,
+            weeks: parseInt(String(weeks), 10) || 4
         });
 
         if (!res.ok) {
             if (res.status === 401 || res.status === 403) await throwAuthOrPaywall(res);
-            throw new Error(`AI request failed: /ai/chat (${res.status})`);
+            throw new Error(`AI request failed: /ai/genesis/syllabus (${res.status})`);
         }
 
         const data = await res.json();
@@ -820,15 +820,11 @@ export const generateFlashcards = async (topic: string, count: number) => {
         }));
     }
     try {
-        const res = await request('/ai/chat', {
-            prompt: `Create ${count} flashcards for "${topic}". Return ONLY a valid JSON array with this structure: [{ "term": "Term", "def": "Definition" }]. Do not include any text outside the JSON.`,
-            role: 'teacher',
-            context: 'You are a study aid generator. Output strict JSON only.'
-        });
+        const res = await request('/ai/genesis/flashcards', { topic, count });
 
         if (!res.ok) {
             if (res.status === 401 || res.status === 403) await throwAuthOrPaywall(res);
-            throw new Error(`AI request failed: /ai/chat (${res.status})`);
+            throw new Error(`AI request failed: /ai/genesis/flashcards (${res.status})`);
         }
 
         const data = await res.json();
@@ -857,15 +853,11 @@ export const generateStructuredQuiz = async (topic: string, count: number) => {
         }));
     }
     try {
-        const res = await request('/ai/chat', {
-            prompt: `Create ${count} multiple choice questions for "${topic}". Return ONLY a valid JSON array with this structure: [{ "q": "Question text", "options": ["A", "B", "C", "D"], "correct": 0 }]. (correct is the index 0-3). Do not include any text outside the JSON.`,
-            role: 'teacher',
-            context: 'You are an exam creator. Output strict JSON only.'
-        });
+        const res = await request('/ai/genesis/quiz', { topic, count });
 
         if (!res.ok) {
             if (res.status === 401 || res.status === 403) await throwAuthOrPaywall(res);
-            throw new Error(`AI request failed: /ai/chat (${res.status})`);
+            throw new Error(`AI request failed: /ai/genesis/quiz (${res.status})`);
         }
 
         const data = await res.json();

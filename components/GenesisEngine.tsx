@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Book, Layers, HelpCircle, Loader2, Sparkles, Plus, Play, RotateCw, CheckCircle2, XCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Book, Layers, HelpCircle, Loader2, Sparkles, Plus, Play, RotateCw, CheckCircle2, XCircle, Search } from 'lucide-react';
 import { generateSyllabus, generateFlashcards, generateStructuredQuiz } from '../services/geminiService';
+import { SUBJECT_SUGGESTIONS, MOCK_CLASSES } from '../constants';
 
 type Mode = 'syllabus' | 'flashcards' | 'quiz';
 
@@ -33,6 +34,65 @@ const GenesisEngine: React.FC = () => {
   const [grade, setGrade] = useState('');
   const [weeks, setWeeks] = useState('4');
   const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({});
+
+  // Autocomplete state
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const suggestionRef = useRef<HTMLDivElement>(null);
+
+  // Combined suggestions source
+  const allSuggestions = Array.from(new Set([
+    ...SUBJECT_SUGGESTIONS,
+    ...MOCK_CLASSES.map(c => c.name),
+    ...MOCK_CLASSES.map(c => c.subject)
+  ]));
+
+  useEffect(() => {
+    if (topic.trim().length > 1) {
+      const filtered = allSuggestions.filter(s => 
+        s.toLowerCase().includes(topic.toLowerCase())
+      ).slice(0, 5);
+      setSuggestions(filtered);
+      setShowSuggestions(filtered.length > 0);
+      setSelectedIndex(-1);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setSelectedIndex(-1);
+    }
+  }, [topic]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!showSuggestions) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev + 1) % suggestions.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev - 1 + suggestions.length) % suggestions.length);
+    } else if (e.key === 'Enter') {
+      if (selectedIndex >= 0) {
+        e.preventDefault();
+        setTopic(suggestions[selectedIndex]);
+        setShowSuggestions(false);
+      }
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+    }
+  };
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (suggestionRef.current && !suggestionRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleGenerate = async () => {
     if (!topic) return;
@@ -114,14 +174,40 @@ const GenesisEngine: React.FC = () => {
            </div>
 
            <div className="space-y-4">
-             <div>
+             <div className="relative" ref={suggestionRef}>
                <label className="block text-xs font-mono text-slate-400 uppercase mb-2">Core Topic / Concept</label>
-               <input 
-                 value={topic}
-                 onChange={(e) => setTopic(e.target.value)}
-                 placeholder="e.g. Quantum Mechanics, World War II"
-                 className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white placeholder-slate-600 focus:border-white/30 outline-none transition-all font-mono"
-               />
+               <div className="relative">
+                 <input 
+                   value={topic}
+                   onChange={(e) => setTopic(e.target.value)}
+                   onKeyDown={handleKeyDown}
+                   onFocus={() => topic.trim().length > 1 && setShowSuggestions(suggestions.length > 0)}
+                   placeholder="e.g. Quantum Mechanics, World War II"
+                   className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white placeholder-slate-600 focus:border-white/30 outline-none transition-all font-mono pl-12"
+                 />
+                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-600" size={18} />
+               </div>
+
+               {showSuggestions && (
+                 <div className="absolute z-50 w-full mt-2 bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-xl overflow-hidden shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200">
+                   {suggestions.map((s, i) => (
+                     <button
+                       key={i}
+                       onClick={() => {
+                         setTopic(s);
+                         setShowSuggestions(false);
+                       }}
+                       onMouseEnter={() => setSelectedIndex(i)}
+                       className={`w-full text-left px-4 py-3 text-sm transition-colors border-b border-white/5 last:border-0 font-mono flex items-center gap-3 ${
+                         i === selectedIndex ? 'bg-white/20 text-white' : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                       }`}
+                     >
+                       <div className={`w-1.5 h-1.5 rounded-full ${i === selectedIndex ? 'bg-white animate-pulse' : 'bg-indigo-500'}`}></div>
+                       {s}
+                     </button>
+                   ))}
+                 </div>
+               )}
              </div>
 
              {activeMode === 'syllabus' && (

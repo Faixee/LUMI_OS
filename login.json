@@ -1,6 +1,0 @@
-﻿{
-    "access_token":  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsIm5hbWUiOiJTeXN0ZW0gQWRtaW4iLCJleHAiOjE3NjUyMDE0OTd9.iahNviExfQEBjdio01c7KGwQOEO0t7eL2-y3HhP0IWM",
-    "token_type":  "bearer",
-    "role":  "admin",
-    "name":  "System Admin"
-}
