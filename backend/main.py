@@ -17,12 +17,12 @@ import re
 import httpx
 import logging
 from backend.config import settings
-from pythonjsonlogger import jsonlogger
+from pythonjsonlogger.json import JsonFormatter
 
 # --- LOGGING CONFIGURATION ---
 logger = logging.getLogger("lumios")
 log_handler = logging.StreamHandler()
-formatter = jsonlogger.JsonFormatter(
+formatter = JsonFormatter(
     '%(asctime)s %(levelname)s %(name)s %(message)s %(request_id)s %(method)s %(path)s %(status_code)s %(duration_ms)s'
 )
 log_handler.setFormatter(formatter)
@@ -224,13 +224,15 @@ if isinstance(settings.CORS_ORIGINS, list):
 else:
     cors_origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()]
 
+# If we're in production, we might want to restrict this more carefully,
+# but for now, we ensure current origin is allowed if it's a known domain.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "X-Internal-Dev-Secret", "X-Request-ID"],
-    expose_headers=["Content-Length", "X-Request-ID"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["Content-Length", "X-Request-ID", "Content-Type", "Authorization"],
     max_age=600,
 )
 
@@ -404,10 +406,9 @@ try:
             
             # Add a sample student so the UI isn't empty
             sample_student = models.Student(
+                id="S1001",
                 name="Demo Student",
-                email="student@lumix.edu",
                 grade_level=10,
-                class_name="10-A",
                 attendance=95.5,
                 gpa=3.8,
                 behavior_score=90,
@@ -420,9 +421,40 @@ try:
 except Exception as e:
     logger.error(f"Self-Healing failed: {e}")
 
-# ----------------------------
-# GOOGLE GENAI
-# ----------------------------
+# --- TEACHER MODULE ---
+@app.get("/teacher/classes", response_model=List[Dict[str, Any]])
+def get_teacher_classes(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    classes = db.query(models.TeacherClass).filter(models.TeacherClass.teacher_id == current_user.id).all()
+    return [{"name": c.name, "room": c.room, "time": c.time, "students_count": c.students_count} for c in classes]
+
+# --- STUDENT MODULE ---
+@app.get("/student/schedule", response_model=List[Dict[str, Any]])
+def get_student_schedule(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    items = db.query(models.ScheduleItem).filter(models.ScheduleItem.user_id == current_user.id).all()
+    return [{"subject": i.subject, "time": i.time, "room": i.room, "day": i.day} for i in items]
+
+@app.get("/student/assignments", response_model=List[Dict[str, Any]])
+def get_student_assignments(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    assignments = db.query(models.Assignment).filter(models.Assignment.student_id == current_user.id).all()
+    return [{"title": a.title, "subject": a.subject, "due_date": a.due_date, "status": a.status} for a in assignments]
+
+# --- TRANSPORT & LIBRARY ---
+@app.get("/transport/routes", response_model=List[Dict[str, Any]])
+def get_transport_routes(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    routes = db.query(models.TransportRoute).all()
+    return [{"id": r.id, "route_name": r.route_name, "driver_name": r.driver_name, "license_plate": r.license_plate, "fuel_level": r.fuel_level, "status": r.status} for r in routes]
+
+@app.get("/library/books", response_model=List[Dict[str, Any]])
+def get_library_books(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    books = db.query(models.LibraryBook).all()
+    return [{"id": b.id, "title": b.title, "author": b.author, "category": b.category, "status": b.status} for b in books]
+
+# --- PARENT MODULE ---
+@app.get("/parent/transport", response_model=List[Dict[str, Any]])
+def get_parent_transport(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    # In a real app, we'd filter by the child's assigned route
+    routes = db.query(models.TransportRoute).filter(models.TransportRoute.status == "Active").all()
+    return [{"route_name": r.route_name, "driver_name": r.driver_name, "status": r.status} for r in routes]
 if settings.GEMINI_API_KEY and genai:
     try:
         genai.configure(api_key=settings.GEMINI_API_KEY)
@@ -1556,6 +1588,29 @@ async def analyze_url(req: schemas.URLAnalysisRequest, request: Request,
     finally:
         log_row.duration_ms = int((time.time() - started) * 1000)
         db.commit()
+
+
+@app.post("/db/test-connection")
+async def test_db_connection(req: schemas.DbTestRequest, current_user: models.User = Depends(auth.get_current_user)):
+    """
+    Attempts to connect to a database with the provided connection string.
+    Only authenticated users can test connections.
+    """
+    try:
+        from sqlalchemy import create_engine, text
+        # Use a short timeout for the test
+        # Note: In production, you'd want to validate the connection string format
+        # and potentially restrict which protocols are allowed.
+        engine = create_engine(req.connection_string, connect_args={"connect_timeout": 5})
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return {"status": "success", "message": "Neural link to database established."}
+    except Exception as e:
+        logger.error(f"DB Test Connection error: {e}")
+        return JSONResponse(
+            status_code=400,
+            content={"status": "error", "message": f"Connection failed: {str(e)}"}
+        )
 
 
 @app.post("/ai/chat", response_model=schemas.ChatResponse)

@@ -2,6 +2,11 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
+class DbTestRequest(BaseModel):
+    host: Optional[str] = None
+    port: Optional[str] = None
+    connection_string: str
+
 # --- AUTH ---
 class UserCreate(BaseModel):
     username: str

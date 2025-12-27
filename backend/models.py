@@ -133,6 +133,36 @@ class Student(Base):
     
     fees = relationship("FeeRecord", back_populates="student")
 
+class TeacherClass(Base):
+    __tablename__ = "teacher_classes"
+    id = Column(Integer, primary_key=True, index=True)
+    school_id = Column(String, default="default", index=True)
+    teacher_id = Column(Integer, ForeignKey("users.id"))
+    name = Column(String)
+    room = Column(String)
+    time = Column(String)
+    students_count = Column(Integer, default=0)
+
+class ScheduleItem(Base):
+    __tablename__ = "schedules"
+    id = Column(Integer, primary_key=True, index=True)
+    school_id = Column(String, default="default", index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    subject = Column(String)
+    time = Column(String)
+    room = Column(String)
+    day = Column(String) # Monday, Tuesday, etc.
+
+class Assignment(Base):
+    __tablename__ = "assignments"
+    id = Column(Integer, primary_key=True, index=True)
+    school_id = Column(String, default="default", index=True)
+    student_id = Column(Integer, ForeignKey("users.id"))
+    title = Column(String)
+    subject = Column(String)
+    due_date = Column(String)
+    status = Column(String, default="Pending") # Pending, Submitted, Graded
+
 class FeeRecord(Base):
     __tablename__ = "fees"
     id = Column(String, primary_key=True, index=True)

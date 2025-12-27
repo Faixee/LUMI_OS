@@ -70,7 +70,8 @@ const SystemApp: React.FC = () => {
 
   const subscriptionValue = (subscriptionStatus || '').toLowerCase().trim();
   const nonPaidValues = new Set(['', 'demo', 'free', 'visitor', 'expired', 'inactive', 'trial']);
-  const isDemoUser = nonPaidValues.has(subscriptionValue) || userRole === 'demo';
+  const userToken = authService.getUser().token;
+  const isDemoUser = nonPaidValues.has(subscriptionValue) || userRole === 'demo' || userToken === 'demo_session_token';
 
   // Authentication & initial user
   useEffect(() => {
@@ -107,7 +108,7 @@ const SystemApp: React.FC = () => {
   }, [navigate]);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || isDemoUser) return;
     const syncSubscription = async () => {
       const data = await api.getSubscriptionStatus();
       const status = (data?.status || '').toString();
@@ -360,6 +361,23 @@ const SystemApp: React.FC = () => {
 
   return (
     <div className="flex bg-[#030014] text-slate-200 h-[100dvh] w-[100vw] relative font-sans overflow-hidden selection:bg-cyan-500/30">
+      {isDemoUser && (
+        <div className="fixed top-0 left-0 right-0 z-[100] bg-gradient-to-r from-amber-600/90 to-orange-600/90 backdrop-blur-md border-b border-amber-500/30 px-4 py-1.5 flex items-center justify-center gap-4 shadow-2xl">
+          <div className="flex items-center gap-2">
+            <Bot size={14} className="text-white animate-pulse" />
+            <span className="text-[10px] font-bold font-sci-fi tracking-[0.2em] text-white uppercase">DEMO MODE ACTIVE</span>
+          </div>
+          <div className="h-4 w-[1px] bg-white/20" />
+          <p className="text-[10px] font-mono text-white/90">AI responses are simulated for demonstration purposes. Features may have limited quotas.</p>
+          <button 
+            onClick={() => setCurrentView('subscription')}
+            className="ml-4 px-3 py-0.5 bg-white text-orange-600 rounded-full text-[9px] font-bold font-sci-fi hover:bg-orange-50 transition-colors uppercase tracking-wider"
+          >
+            Upgrade Now
+          </button>
+        </div>
+      )}
+
       {/* Background Ambience - Fixed and behind everything */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-900/20 rounded-full blur-[120px] animate-pulse"></div>
@@ -412,7 +430,7 @@ const SystemApp: React.FC = () => {
         onLogout={handleLogout}
       />
 
-      <main className={`flex-1 relative z-10 transition-all duration-300 flex flex-col ${isCockpit ? 'h-full overflow-hidden' : 'h-full overflow-y-auto overscroll-contain'} ${isSidebarOpen ? 'blur-sm md:blur-none' : ''} md:ml-72 min-w-0 p-4 md:p-8`}>
+      <main className={`flex-1 relative z-10 transition-all duration-300 flex flex-col ${isCockpit ? 'h-full overflow-hidden' : 'h-full overflow-y-auto overscroll-contain'} ${isSidebarOpen ? 'blur-sm md:blur-none' : ''} md:ml-72 min-w-0 p-4 md:p-8 ${isDemoUser ? 'mt-8' : ''}`}>
         {/* Developer God Mode Switcher */}
         {initialRole === 'developer' && (
           <div className="fixed top-4 right-24 z-[60] flex items-center gap-3 bg-purple-900/40 backdrop-blur-md border border-purple-500/30 p-2 rounded-xl">

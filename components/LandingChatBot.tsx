@@ -179,7 +179,8 @@ const LandingChatBot: React.FC<LandingChatBotProps> = ({ onScrollTo }) => {
     const animationFrameRef = useRef<number>();
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const recognitionRef = useRef<any>(null);
-    const recognitionRetryRef = useRef<number>(0);
+    const recognitionRetryRef = useRef(0);
+    const hasPermissionRef = useRef<boolean | null>(null);
     const MAX_RECOGNITION_RETRIES = 3;
 
     // → VOICE & RECOGNITION FUNCTIONS
@@ -248,7 +249,10 @@ const LandingChatBot: React.FC<LandingChatBotProps> = ({ onScrollTo }) => {
         recognition.onend = () => {
             setIsListening(false);
             // If we are in a call, restart listening (continuous conversation)
-            if (callState.isActive && recognitionRetryRef.current < MAX_RECOGNITION_RETRIES) {
+            // Stop retrying if permission was explicitly denied
+            if (callState.isActive && 
+                hasPermissionRef.current !== false &&
+                recognitionRetryRef.current < MAX_RECOGNITION_RETRIES) {
                 try {
                     recognition.start();
                 } catch {
@@ -263,13 +267,15 @@ const LandingChatBot: React.FC<LandingChatBotProps> = ({ onScrollTo }) => {
                 setInput(transcript);
                 handleSend(transcript);
                 recognitionRetryRef.current = 0; // Reset retries on success
+                hasPermissionRef.current = true;
             }
         };
 
         recognition.onerror = (event: any) => {
             console.warn("Speech recognition error:", event.error);
             if (event.error === 'not-allowed') {
-                setSpeechError("Microphone access denied.");
+                setSpeechError("Microphone access denied. Please enable it in your browser settings.");
+                hasPermissionRef.current = false;
             }
         };
 
@@ -282,7 +288,16 @@ const LandingChatBot: React.FC<LandingChatBotProps> = ({ onScrollTo }) => {
         try {
             setCallState(prev => ({ ...prev, isConnecting: true }));
             
+            // 0. Check for Secure Context
+            if (!window.isSecureContext && window.location.hostname !== 'localhost') {
+                throw new Error("Microphone access requires a secure connection (HTTPS).");
+            }
+
             // 1. Request Microphone Access
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error("Your browser does not support microphone access.");
+            }
+
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: {
                     echoCancellation: true,
@@ -291,6 +306,7 @@ const LandingChatBot: React.FC<LandingChatBotProps> = ({ onScrollTo }) => {
                 } 
             });
             streamRef.current = stream;
+            hasPermissionRef.current = true;
 
             // 2. Initialize Audio Context for Visualizer
             const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -326,9 +342,20 @@ const LandingChatBot: React.FC<LandingChatBotProps> = ({ onScrollTo }) => {
             const greeting = currentLang.code === 'ur' ? "میں سن رہی ہوں۔" : "I'm listening.";
             speak(greeting);
 
-        } catch (err) {
+        } catch (err: any) {
             console.error("Failed to start call:", err);
-            setSpeechError("Could not access microphone.");
+            let errorMessage = "Could not access microphone.";
+            
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                errorMessage = "Microphone access denied. Please enable it in your browser settings and try again.";
+                hasPermissionRef.current = false;
+            } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                errorMessage = "No microphone found on your device.";
+            } else if (err.message) {
+                errorMessage = err.message;
+            }
+
+            setSpeechError(errorMessage);
             setCallState(prev => ({ ...prev, isConnecting: false, isActive: false }));
         }
     };

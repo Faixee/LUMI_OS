@@ -13,6 +13,15 @@ const DataNexus: React.FC<DataNexusProps> = ({ onSync }) => {
   const [progress, setProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
 
+  // DB Connection States
+  const [dbConfig, setDbConfig] = useState({
+    host: '',
+    port: '',
+    connectionString: ''
+  });
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [testMessage, setTestMessage] = useState('');
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -35,6 +44,26 @@ const DataNexus: React.FC<DataNexusProps> = ({ onSync }) => {
         clearInterval(timer);
         setUploadStatus('error');
         setErrorMessage("Connection refused by Nexus Gateway");
+    }
+  };
+
+  const handleTestConnection = async () => {
+    if (!dbConfig.connectionString) {
+      setTestStatus('error');
+      setTestMessage('Connection string is required.');
+      return;
+    }
+
+    setTestStatus('testing');
+    setTestMessage('Initiating handshake...');
+
+    try {
+      const result = await api.testDbConnection(dbConfig.host, dbConfig.port, dbConfig.connectionString);
+      setTestStatus('success');
+      setTestMessage(result.message || 'Connection established successfully.');
+    } catch (err: any) {
+      setTestStatus('error');
+      setTestMessage(err.message || 'Connection failed.');
     }
   };
 
@@ -144,15 +173,33 @@ const DataNexus: React.FC<DataNexusProps> = ({ onSync }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                         <label className="text-xs font-mono text-slate-400 uppercase">Host / Server IP</label>
-                        <input type="text" placeholder="192.168.1.X" className="w-full bg-black/30 border border-white/10 rounded-lg p-3 text-white font-mono focus:border-cyan-500 outline-none" />
+                        <input 
+                            type="text" 
+                            placeholder="192.168.1.X" 
+                            value={dbConfig.host}
+                            onChange={(e) => setDbConfig({...dbConfig, host: e.target.value})}
+                            className="w-full bg-black/30 border border-white/10 rounded-lg p-3 text-white font-mono focus:border-cyan-500 outline-none" 
+                        />
                     </div>
                     <div className="space-y-2">
                         <label className="text-xs font-mono text-slate-400 uppercase">Port</label>
-                        <input type="text" placeholder="5432" className="w-full bg-black/30 border border-white/10 rounded-lg p-3 text-white font-mono focus:border-cyan-500 outline-none" />
+                        <input 
+                            type="text" 
+                            placeholder="5432" 
+                            value={dbConfig.port}
+                            onChange={(e) => setDbConfig({...dbConfig, port: e.target.value})}
+                            className="w-full bg-black/30 border border-white/10 rounded-lg p-3 text-white font-mono focus:border-cyan-500 outline-none" 
+                        />
                     </div>
                     <div className="col-span-1 md:col-span-2 space-y-2">
                          <label className="text-xs font-mono text-slate-400 uppercase">Connection String / API Key</label>
-                         <input type="password" placeholder="postgres://user:pass@host:port/db" className="w-full bg-black/30 border border-white/10 rounded-lg p-3 text-white font-mono focus:border-cyan-500 outline-none" />
+                         <input 
+                            type="password" 
+                            placeholder="postgres://user:pass@host:port/db" 
+                            value={dbConfig.connectionString}
+                            onChange={(e) => setDbConfig({...dbConfig, connectionString: e.target.value})}
+                            className="w-full bg-black/30 border border-white/10 rounded-lg p-3 text-white font-mono focus:border-cyan-500 outline-none" 
+                        />
                     </div>
                 </div>
 
@@ -163,10 +210,29 @@ const DataNexus: React.FC<DataNexusProps> = ({ onSync }) => {
                     </div>
                 </div>
 
+                {testStatus !== 'idle' && (
+                    <div className={`p-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 ${
+                        testStatus === 'success' ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' : 
+                        testStatus === 'testing' ? 'bg-cyan-500/10 border border-cyan-500/20 text-cyan-400' : 
+                        'bg-rose-500/10 border border-rose-500/20 text-rose-400'
+                    }`}>
+                        {testStatus === 'success' ? <CheckCircle2 size={18} /> : 
+                         testStatus === 'testing' ? <RefreshCw size={18} className="animate-spin" /> : 
+                         <AlertTriangle size={18} />}
+                        <span className="text-xs font-mono uppercase tracking-wider">{testMessage}</span>
+                    </div>
+                )}
+
                 <div className="flex justify-end pt-4">
-                    <button className="w-full md:w-auto flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white px-6 py-3 rounded-xl font-bold font-sci-fi transition-all">
-                        <RefreshCw size={18} />
-                        TEST CONNECTION
+                    <button 
+                        onClick={handleTestConnection}
+                        disabled={testStatus === 'testing'}
+                        className={`w-full md:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold font-sci-fi transition-all ${
+                            testStatus === 'testing' ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-lg shadow-cyan-500/20'
+                        }`}
+                    >
+                        <RefreshCw size={18} className={testStatus === 'testing' ? 'animate-spin' : ''} />
+                        {testStatus === 'testing' ? 'NEURAL LINKING...' : 'TEST CONNECTION'}
                     </button>
                 </div>
             </div>

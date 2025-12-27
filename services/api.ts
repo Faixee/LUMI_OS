@@ -21,7 +21,7 @@ const getApiUrl = () => {
   const envUrl = (import.meta as any).env?.VITE_API_URL;
   if (envUrl) return envUrl;
   
-  return 'http://127.0.0.1:8000';
+  return 'http://localhost:8000';
 };
 
 const API_URL = getApiUrl();
@@ -38,6 +38,25 @@ const getHeaders = (isMultipart = false) => {
         headers['Content-Type'] = 'application/json';
     }
     return headers;
+};
+
+// Demo Mode Guard: Intercepts API calls in demo mode to prevent production usage
+const demoGuard = async (path: string, options: any = {}) => {
+    const user = authService.getUser();
+    if (user.token === 'demo_session_token' || user.role === 'demo') {
+        // Prevent sensitive data modifications in demo mode
+        const sensitiveMethods = ['POST', 'PUT', 'DELETE', 'PATCH'];
+        const method = options.method || 'GET';
+        
+        if (sensitiveMethods.includes(method) && !path.includes('/db/test-connection') && !path.includes('/nexus/upload')) {
+            console.warn(`[DEMO GUARD] Intercepted ${method} request to ${path}. Data persistence is disabled in demo mode.`);
+            return new Response(JSON.stringify({ 
+                message: "Demonstration Mode: Changes are not saved to the persistent database.",
+                demo: true 
+            }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+    }
+    return null;
 };
 
 const dispatchAccessEvent = (detail: any) => {
@@ -71,8 +90,13 @@ const throwHttpError = async (res: Response): Promise<never> => {
   if (code) err.code = String(code);
 
   if (res.status === 401) {
-    authService.logout();
-    dispatchAccessEvent({ type: 'auth', status: 401 });
+    const user = authService.getUser();
+    if (user.token === 'demo_session_token') {
+      console.warn('[LUMIX] Demo session API call returned 401. Ignoring redirect.');
+    } else {
+      authService.logout();
+      dispatchAccessEvent({ type: 'auth', status: 401 });
+    }
   } else if (res.status === 403 && err.code) {
     dispatchAccessEvent({ type: 'paywall', status: 403, code: err.code });
   }
@@ -126,6 +150,7 @@ export const api = {
 
   updateSchoolConfig: async (config: SchoolConfig): Promise<boolean> => {
     try {
+      const path = `${API_URL}/school/config`;
       const payload = {
         name: config.name,
         motto: config.motto,
@@ -137,11 +162,16 @@ export const api = {
         security_level: config.systemSettings?.securityLevel,
         ai_creativity: config.systemSettings?.aiCreativity
       };
-      const res = await fetch(`${API_URL}/school/config`, {
+      const options = {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify(payload)
-      });
+      };
+
+      const intercepted = await demoGuard(path, options);
+      if (intercepted) return true;
+
+      const res = await fetch(path, options);
       if (!res.ok) await throwHttpError(res);
       return true;
     } catch (e) { return false; }
@@ -280,16 +310,79 @@ export const api = {
   // --- TRANSPORT ---
   getTransport: async (): Promise<TransportRoute[]> => {
     try {
-        const res = await fetch(`${API_URL}/transport/`, { headers: getHeaders() });
+        const res = await fetch(`${API_URL}/transport/routes`, { headers: getHeaders() });
         if (!res.ok) await throwHttpError(res);
-        return await res.json();
+        const data = await res.json();
+        return data.map((r: any) => ({
+            id: r.id,
+            route: r.route_name,
+            driver: r.driver_name,
+            status: r.status,
+            fuel: r.fuel_level,
+            plate: r.license_plate
+        }));
     } catch (e) { return []; }
   },
 
   // --- LIBRARY ---
   getLibrary: async (): Promise<LibraryBook[]> => {
     try {
-        const res = await fetch(`${API_URL}/library/`, { headers: getHeaders() });
+        const res = await fetch(`${API_URL}/library/books`, { headers: getHeaders() });
+        if (!res.ok) await throwHttpError(res);
+        return await res.json();
+    } catch (e) { return []; }
+  },
+
+  // --- ACADEMICS ---
+  getClasses: async (): Promise<any[]> => {
+    try {
+        const role = authService.getUser()?.role;
+        const endpoint = role === 'teacher' ? '/teacher/classes' : '/student/schedule';
+        const res = await fetch(`${API_URL}${endpoint}`, { headers: getHeaders() });
+        if (!res.ok) await throwHttpError(res);
+        const data = await res.json();
+        if (role === 'teacher') {
+          return data.map((c: any) => ({
+            id: Math.random().toString(),
+            name: c.name,
+            room: c.room,
+            schedule: c.time,
+            students: c.students_count,
+            subject: 'Academic'
+          }));
+        } else {
+          return data.map((i: any) => ({
+            id: Math.random().toString(),
+            name: i.subject,
+            room: i.room,
+            schedule: `${i.day} ${i.time}`,
+            students: 0,
+            subject: i.subject
+          }));
+        }
+    } catch (e) { return []; }
+  },
+
+  getAssignments: async (): Promise<any[]> => {
+    try {
+        const res = await fetch(`${API_URL}/student/assignments`, { headers: getHeaders() });
+        if (!res.ok) await throwHttpError(res);
+        const data = await res.json();
+        return data.map((a: any) => ({
+          id: Math.random().toString(),
+          title: a.title,
+          dueDate: a.due_date,
+          status: a.status,
+          subject: a.subject,
+          submissions: 0,
+          total: 100
+        }));
+    } catch (e) { return []; }
+  },
+
+  getParentTransport: async (): Promise<any[]> => {
+    try {
+        const res = await fetch(`${API_URL}/parent/transport`, { headers: getHeaders() });
         if (!res.ok) await throwHttpError(res);
         return await res.json();
     } catch (e) { return []; }
@@ -310,18 +403,6 @@ export const api = {
     } catch (e) { return []; }
   },
 
-  // --- CLASSES ---
-  getClasses: async (): Promise<ClassSession[]> => {
-      // Mock or implement backend endpoint
-      return []; 
-  },
-
-  // --- ASSIGNMENTS ---
-  getAssignments: async (): Promise<Assignment[]> => {
-      // Mock or implement backend endpoint
-      return []; 
-  },
-
   // --- CSV UPLOAD ---
   uploadCSV: async (file: File) => {
     const formData = new FormData();
@@ -333,6 +414,18 @@ export const api = {
     });
     if (!res.ok) await throwHttpError(res);
     return await res.json();
+  },
+
+  // --- DATABASE TEST ---
+  testDbConnection: async (host: string, port: string, connectionString: string) => {
+    const res = await fetch(`${API_URL}/db/test-connection`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ host, port, connection_string: connectionString })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Connection failed");
+    return data;
   },
 
   // --- ASSIGNMENT UPLOAD (Teacher/Admin) ---
