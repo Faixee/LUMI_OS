@@ -430,7 +430,7 @@ const SystemApp: React.FC = () => {
         onLogout={handleLogout}
       />
 
-      <main className={`flex-1 relative z-10 transition-all duration-300 flex flex-col ${isCockpit ? 'h-full overflow-hidden' : 'h-full overflow-y-auto overscroll-contain'} ${isSidebarOpen ? 'blur-sm md:blur-none' : ''} lg:ml-72 min-w-0 p-4 sm:p-6 lg:p-8 ${isDemoUser ? 'pt-16 sm:pt-20 lg:pt-12' : ''}`}>
+      <main className={`flex-1 relative z-10 transition-all duration-300 flex flex-col ${isCockpit ? 'lg:h-full lg:overflow-hidden overflow-y-auto' : 'h-full overflow-y-auto overscroll-contain'} ${isSidebarOpen ? 'blur-sm md:blur-none' : ''} lg:ml-72 min-w-0 p-4 sm:p-6 lg:p-8 ${isDemoUser ? 'pt-16 sm:pt-20 lg:pt-12' : ''}`}>
         {/* Mobile Header & Controls */}
         <div className="flex lg:hidden items-center justify-between mb-6 shrink-0 bg-black/20 backdrop-blur-md p-3 rounded-2xl border border-white/5 sticky top-0 z-[50]">
           <button 

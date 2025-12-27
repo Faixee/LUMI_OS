@@ -135,7 +135,7 @@ const GenesisEngine: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-14rem)] w-full animate-in fade-in duration-500">
+    <div className="flex flex-col flex-1 min-h-0 w-full animate-in fade-in duration-500">
       
       {/* 1. TOP BAR NAVIGATION */}
       <div className="flex flex-wrap justify-center gap-2 sm:gap-4 mb-4 sm:mb-6 bg-black/40 backdrop-blur-xl border border-white/10 p-2 rounded-2xl w-full sm:w-fit mx-auto">
@@ -163,7 +163,7 @@ const GenesisEngine: React.FC = () => {
       <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 flex-1 min-h-0">
         
         {/* LEFT PANEL: INPUTS */}
-        <div className="w-full lg:w-1/3 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl p-4 sm:p-6 flex flex-col gap-4 sm:gap-6 overflow-y-auto custom-scrollbar relative overflow-hidden group flex-shrink-0">
+        <div className="w-full lg:w-1/3 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl p-4 sm:p-6 flex flex-col gap-4 sm:gap-6 lg:overflow-y-auto custom-scrollbar relative overflow-hidden group flex-shrink-0">
            <div className={`absolute top-0 left-0 w-full h-1 ${getBgColor(activeMode)} opacity-50`}></div>
            
            <div className="space-y-2">
@@ -273,7 +273,7 @@ const GenesisEngine: React.FC = () => {
         </div>
 
         {/* RIGHT PANEL: OUTPUT (HOLO-PROJECTOR) */}
-        <div className="flex-1 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-8 relative overflow-hidden flex flex-col min-h-[500px]">
+        <div className="flex-1 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-4 sm:p-8 relative overflow-hidden flex flex-col min-h-[500px]">
           {/* Scanline Effect */}
           <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,255,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] z-0 bg-[length:100%_2px,3px_100%] opacity-20"></div>
           
@@ -301,7 +301,7 @@ const GenesisEngine: React.FC = () => {
                 <p className="font-mono text-sm tracking-widest">{error ? error.toUpperCase() : 'AWAITING INPUT VECTORS'}</p>
               </div>
             ) : (
-              <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
+              <div className="flex-1 lg:overflow-y-auto custom-scrollbar pr-2">
                 
                 {/* MODE A: SYLLABUS OUTPUT */}
                 {activeMode === 'syllabus' && (

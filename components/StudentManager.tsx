@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Student, AgentName } from '../types';
-import { Plus, Search, Trash2, Brain, AlertCircle, ScanLine, UserPlus, Fingerprint, Activity, ChevronRight } from 'lucide-react';
+import { Plus, Search, Trash2, Brain, AlertCircle, ScanLine, UserPlus, Fingerprint, Activity, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { checkEthics } from '../services/geminiService';
 
 interface StudentManagerProps {
@@ -188,8 +188,8 @@ const StudentManager: React.FC<StudentManagerProps> = ({ students, onAddStudent,
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-300">
-          <div className="glass-panel w-full max-w-lg p-0 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300 border border-indigo-500/30 relative">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-300">
+          <div className="glass-panel w-full max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar p-0 rounded-2xl shadow-2xl animate-in zoom-in-95 duration-300 border border-indigo-500/30 relative">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-cyan-500 to-indigo-500"></div>
             
             <div className="bg-[#0a0a15] p-6 border-b border-white/5 flex justify-between items-center">

@@ -21,10 +21,11 @@
         background-color: #030014; /* Deep space black */
         color: #e2e8f0;
         overflow: hidden;
-        overscroll-behavior: none;
+        width: 100%;
+        height: 100%;
+        position: fixed;
+        touch-action: manipulation;
       }
-
-      /* --- AMBIENT LIGHTING --- */
       .ambient-orb {
         position: fixed;
         border-radius: 50%;
@@ -238,6 +239,8 @@
       
       .custom-scrollbar {
         -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+        scrollbar-color: #4f46e5 #050510;
       }
 
     </style>
