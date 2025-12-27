@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Student, AgentName } from '../types';
-import { Plus, Search, Trash2, Brain, AlertCircle, ScanLine, UserPlus, Fingerprint, Activity, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { Search, Trash2, Brain, AlertCircle, ScanLine, UserPlus, Fingerprint, CheckCircle2 } from 'lucide-react';
 import { checkEthics } from '../services/geminiService';
 
 interface StudentManagerProps {
@@ -251,8 +251,5 @@ const StudentManager: React.FC<StudentManagerProps> = ({ students, onAddStudent,
     </div>
   );
 };
-
-// Missing Import fix
-import { CheckCircle2 } from 'lucide-react';
 
 export default StudentManager;
