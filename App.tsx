@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams, useLocation } from 'react-router-dom';
 import LandingPage from './components/LandingPage';
 import LoginView from './components/LoginView';
 import SystemApp from './components/SystemApp';
@@ -11,19 +11,29 @@ import { authService } from './services/auth';
 const DemoHandler = () => {
     const navigate = useNavigate();
     const { role } = useParams<{ role?: string }>();
+    const location = useLocation();
+    
+    // Parse the dashboard type from query parameters
+    const queryParams = new URLSearchParams(location.search);
+    const dashboardType = queryParams.get('type') || 'development';
 
     React.useEffect(() => {
         const run = async () => {
             // No backend login needed for demo mode as per user request
             // Directly set demo credentials in session storage
             const targetRole = role || 'admin';
-            const demoName = "LumiX Demo User";
+            const demoName = dashboardType === 'paid' ? "LumiX Premium User" : "LumiX Demo User";
+            
+            // Map dashboard type to subscription status and token
+            // 'demo' triggers development/free logic, 'pro' triggers paid logic
+            const subStatus = dashboardType === 'paid' ? 'pro' : 'demo';
+            const demoToken = dashboardType === 'paid' ? 'premium_demo_token' : 'demo_session_token';
             
             const store = sessionStorage;
-            store.setItem('lumix_token', 'demo_session_token');
+            store.setItem('lumix_token', demoToken);
             store.setItem('lumix_role', targetRole);
             store.setItem('lumix_user', demoName);
-            store.setItem('lumix_subscription', 'demo');
+            store.setItem('lumix_subscription', subStatus);
             
             // Clear any real user data
             localStorage.removeItem('lumix_token');
@@ -37,12 +47,14 @@ const DemoHandler = () => {
             }, 800);
         };
         run();
-    }, [navigate, role]);
+    }, [navigate, role, dashboardType]);
     return (
         <div className="flex items-center justify-center h-screen bg-[#030014] text-white font-mono">
             <div className="animate-pulse text-cyan-400 flex flex-col items-center gap-4">
                 <div className="w-12 h-12 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-                <div className="tracking-widest uppercase text-xs">Initializing {role || 'Demo'} Environment...</div>
+                <div className="tracking-widest uppercase text-xs">
+                    Initializing {role || 'Demo'} {dashboardType} Environment...
+                </div>
             </div>
         </div>
     );

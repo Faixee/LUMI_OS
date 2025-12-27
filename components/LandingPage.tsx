@@ -516,9 +516,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateLogin }) => {
         <DemoSelectorModal
           isOpen={isDemoSelectorOpen}
           onClose={() => setIsDemoSelectorOpen(false)}
-          onSelectRole={(role) => {
+          onSelectRole={(role, type) => {
             setIsDemoSelectorOpen(false);
-            navigate(`/demo/${role}`);
+            // Append type as a query parameter for the demo handler to process
+            navigate(`/demo/${role}?type=${type}`);
           }}
         />
 
