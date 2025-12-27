@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { generateLessonPlan } from '../services/geminiService';
-import { Brain, Sparkles, BookOpen, Copy, Check, Scan, Camera, Upload, FileCheck, Save, XCircle } from 'lucide-react';
+import { Brain, Sparkles, BookOpen, Copy, Check, Scan, Camera, Upload, FileCheck, Save, XCircle, Zap } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -86,260 +86,277 @@ const TeacherAITools: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+    <div className="space-y-6 sm:space-y-8 animate-in slide-in-from-bottom-4 duration-500">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6">
             <div>
-                <h2 className="text-2xl font-bold text-white font-sci-fi text-glow flex items-center gap-2">
+                <h2 className="text-2xl sm:text-3xl font-bold text-white font-sci-fi text-glow flex items-center gap-2">
                     <Brain size={24} className="text-purple-400" />
                     TEACHER COMMAND LINK
                 </h2>
-                <p className="text-slate-400 text-xs mt-1">AI-AUGMENTED PEDAGOGY & AUTOMATION</p>
+                <p className="text-slate-400 text-[10px] sm:text-xs mt-1 font-mono tracking-widest uppercase opacity-70">AI-Augmented Pedagogy & Automation</p>
             </div>
-            <div className="flex gap-2 bg-white/5 p-1 rounded-xl border border-white/10 w-full md:w-auto">
-                <button 
-                    onClick={() => setActiveTab('planner')}
-                    className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold font-mono transition-all ${activeTab === 'planner' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                >
-                    LESSON PLANNER
-                </button>
-                <button 
-                    onClick={() => setActiveTab('grader')}
-                    className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold font-mono transition-all ${activeTab === 'grader' ? 'bg-cyan-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                >
-                    VISION AUTO-GRADER
-                </button>
+            
+            <div className="w-full lg:w-auto">
+                {/* Mobile Dropdown Tab Selector */}
+                <div className="lg:hidden relative">
+                    <select 
+                        value={activeTab}
+                        onChange={(e) => setActiveTab(e.target.value as 'planner' | 'grader')}
+                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold font-mono text-purple-400 appearance-none focus:outline-none focus:ring-1 focus:ring-purple-500/50 transition-all"
+                    >
+                        <option value="planner">LESSON PLANNER</option>
+                        <option value="grader">VISION AUTO-GRADER</option>
+                    </select>
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-purple-400/50">
+                        <Sparkles size={14} />
+                    </div>
+                </div>
+
+                {/* Desktop Horizontal Tabs */}
+                <div className="hidden lg:flex bg-black/40 p-1 rounded-xl border border-white/5 overflow-x-auto no-scrollbar touch-pan-x">
+                    <button 
+                        onClick={() => setActiveTab('planner')}
+                        className={`flex-1 lg:flex-none px-6 py-2.5 rounded-lg text-[10px] sm:text-xs font-bold font-mono tracking-wider transition-all active:scale-95 whitespace-nowrap ${activeTab === 'planner' ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' : 'text-slate-500 hover:text-white'}`}
+                    >
+                        LESSON PLANNER
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('grader')}
+                        className={`flex-1 lg:flex-none px-6 py-2.5 rounded-lg text-[10px] sm:text-xs font-bold font-mono tracking-wider transition-all active:scale-95 whitespace-nowrap ${activeTab === 'grader' ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-500/20' : 'text-slate-500 hover:text-white'}`}
+                    >
+                        VISION AUTO-GRADER
+                    </button>
+                </div>
             </div>
         </div>
 
         {activeTab === 'planner' ? (
-            <div className="flex flex-col lg:flex-row gap-6 lg:h-[calc(100vh-12rem)]">
+            <div className="flex flex-col lg:flex-row gap-6 sm:gap-8">
                 {/* Input Panel */}
-                <div className="w-full lg:w-1/3 space-y-6">
-                    <div className="glass-panel p-6 rounded-2xl border border-purple-500/30 bg-purple-900/10">
-                        <form onSubmit={handleGenerate} className="space-y-4">
+                <div className="w-full lg:w-80 xl:w-96 space-y-6 shrink-0">
+                    <div className="rounded-2xl border border-purple-500/20 bg-purple-500/5 p-5 sm:p-6 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-3xl -mr-16 -mt-16"></div>
+                        <form onSubmit={handleGenerate} className="space-y-5 relative z-10">
                             <div>
-                                <label className="block text-xs font-mono text-purple-300 uppercase mb-2">Topic / Concept</label>
+                                <label className="block text-[10px] font-mono text-purple-300 uppercase tracking-widest mb-2 opacity-70">Topic / Concept</label>
                                 <input 
                                     value={topic}
                                     onChange={(e) => setTopic(e.target.value)}
                                     placeholder="e.g. Photosynthesis, Newton's Laws"
-                                    className="w-full bg-slate-900/50 border border-purple-500/20 rounded-xl p-3 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all placeholder-slate-600"
+                                    className="w-full bg-black/40 border border-white/5 rounded-xl p-3 text-sm text-white focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 transition-all placeholder-slate-600 outline-none"
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-mono text-purple-300 uppercase mb-2">Target Grade</label>
+                                <label className="block text-[10px] font-mono text-purple-300 uppercase tracking-widest mb-2 opacity-70">Target Grade</label>
                                 <select 
                                     value={grade}
                                     onChange={(e) => setGrade(e.target.value)}
-                                    className="w-full bg-slate-900/50 border border-purple-500/20 rounded-xl p-3 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
+                                    className="w-full bg-black/40 border border-white/5 rounded-xl p-3 text-sm text-white focus:border-purple-500/50 transition-all outline-none"
                                 >
                                     {[...Array(12)].map((_, i) => (
-                                        <option key={i} value={i + 1}>Grade {i + 1}</option>
+                                        <option key={i} value={i + 1} className="bg-[#030014]">Grade {i + 1}</option>
                                     ))}
                                 </select>
                             </div>
                             <button 
                                 type="submit" 
                                 disabled={loading || !topic}
-                                className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white py-3 rounded-xl font-bold font-sci-fi tracking-wider shadow-[0_0_20px_rgba(147,51,234,0.3)] transition-all hover:scale-[1.02] flex items-center justify-center gap-2"
+                                className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white py-3.5 rounded-xl text-xs font-bold font-sci-fi tracking-widest shadow-lg shadow-purple-500/20 transition-all active:scale-95 touch-manipulation flex items-center justify-center gap-2"
                             >
                                 {loading ? (
-                                    <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> GENERATING...</>
+                                    <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> PROCESSING...</>
                                 ) : (
-                                    <><Sparkles size={18} /> GENERATE PLAN</>
+                                    <><Sparkles size={16} /> GENERATE PLAN</>
                                 )}
                             </button>
                         </form>
                     </div>
 
-                    <div className="glass-panel p-4 rounded-xl border border-white/5">
-                        <h4 className="text-sm font-bold text-slate-300 mb-2 font-mono">SUGGESTED ACTIONS</h4>
+                    <div className="rounded-2xl border border-white/5 bg-white/5 p-5 sm:p-6">
+                        <h4 className="text-[10px] font-mono text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                            <BookOpen size={14} className="text-purple-400" />
+                            Saved Templates
+                        </h4>
                         <div className="space-y-2">
-                            <button className="w-full text-left p-2 rounded hover:bg-white/5 text-xs text-purple-300 flex items-center gap-2 transition-colors">
-                                <BookOpen size={14} /> Draft Quiz for Grade 10 Math
-                            </button>
-                            <button className="w-full text-left p-2 rounded hover:bg-white/5 text-xs text-purple-300 flex items-center gap-2 transition-colors">
-                                <BookOpen size={14} /> Explain "Quantum Mechanics" simply
-                            </button>
+                            {['Unit Introduction', 'Review Session', 'Lab Instructions'].map((t, i) => (
+                                <button key={i} className="w-full text-left p-3 rounded-lg bg-white/5 hover:bg-white/10 text-[10px] font-mono text-slate-400 hover:text-white transition-colors border border-transparent hover:border-white/5 uppercase tracking-wider">
+                                    {t}
+                                </button>
+                            ))}
                         </div>
                     </div>
                 </div>
 
                 {/* Output Panel */}
-                <div className="w-full lg:flex-1 glass-panel rounded-2xl border border-white/10 flex flex-col overflow-hidden relative min-h-0">
-                    <div className="p-4 border-b border-white/10 bg-black/20 flex justify-between items-center">
-                        <h3 className="font-bold text-white font-sci-fi">GENERATED CONTENT</h3>
-                        {lessonPlan && (
-                            <button 
-                                onClick={copyToClipboard}
-                                className="text-xs flex items-center gap-1 text-slate-400 hover:text-white transition-colors"
-                            >
-                                {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-                                {copied ? 'COPIED' : 'COPY MARKDOWN'}
-                            </button>
-                        )}
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-slate-900/50">
-                        {lessonPlan ? (
-                            <div className="prose prose-invert prose-purple max-w-none">
-                                <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{lessonPlan}</ReactMarkdown>
+                <div className="flex-1 min-w-0">
+                    <div className="rounded-2xl border border-white/5 bg-white/5 h-full flex flex-col min-h-[400px] lg:min-h-[600px] overflow-hidden">
+                        <div className="p-4 sm:p-5 border-b border-white/5 bg-black/20 flex justify-between items-center shrink-0">
+                            <div className="flex items-center gap-2">
+                                <FileCheck size={18} className="text-purple-400" />
+                                <h3 className="font-bold text-white font-sci-fi tracking-widest text-sm uppercase">AI Lesson Output</h3>
                             </div>
-                        ) : (
-                            <div className="h-full flex flex-col items-center justify-center text-slate-600 opacity-50">
-                                <Brain size={64} className="mb-4" />
-                                <p className="font-mono text-sm">AWAITING INPUT PARAMETERS...</p>
+                            {lessonPlan && (
+                                <button 
+                                    onClick={copyToClipboard}
+                                    className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white transition-all active:scale-90 touch-manipulation border border-white/10"
+                                    title="Copy to clipboard"
+                                >
+                                    {copied ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
+                                </button>
+                            )}
+                        </div>
+                        <div className="flex-1 p-5 sm:p-8 overflow-y-auto custom-scrollbar bg-black/20">
+                            {lessonPlan ? (
+                                <div className="prose prose-invert prose-sm max-w-none font-mono text-slate-300 leading-relaxed selection:bg-purple-500/30">
+                                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                                        {lessonPlan}
+                                    </ReactMarkdown>
+                                </div>
+                            ) : (
+                                <div className="h-full flex flex-col items-center justify-center text-center opacity-30 p-8">
+                                    <Brain size={48} className="text-slate-700 mb-4" />
+                                    <p className="text-xs font-mono tracking-widest uppercase">Awaiting instruction parameters</p>
+                                </div>
+                            )}
+                        </div>
+                        {lessonPlan && (
+                            <div className="p-4 border-t border-white/5 bg-black/40 flex justify-end gap-3 shrink-0">
+                                <button className="px-4 py-2 rounded-lg text-[10px] font-bold font-mono text-slate-400 hover:text-white transition-colors uppercase tracking-widest flex items-center gap-2">
+                                    <XCircle size={14} /> Discard
+                                </button>
+                                <button className="px-6 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[10px] font-bold font-mono shadow-lg shadow-purple-500/20 transition-all active:scale-95 touch-manipulation uppercase tracking-widest flex items-center gap-2">
+                                    <Save size={14} /> Save to Vault
+                                </button>
                             </div>
                         )}
                     </div>
                 </div>
             </div>
         ) : (
-            <div className="flex flex-col lg:flex-row gap-6 lg:h-[calc(100vh-12rem)]">
-                {/* Scan Area */}
-                <div className="w-full lg:w-1/2 glass-panel p-8 rounded-2xl border border-cyan-500/30 bg-cyan-900/10 flex flex-col items-center justify-center text-center relative overflow-hidden group min-h-[300px]">
-                    <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(6,182,212,0.05)_50%,transparent_75%)] bg-[length:250%_250%] animate-[gradient_4s_linear_infinite] pointer-events-none"></div>
-                    
-                    {isScanning ? (
-                        <div className="space-y-6 relative z-10">
-                            <div className="w-32 h-32 relative mx-auto">
-                                <div className="absolute inset-0 border-4 border-cyan-500 rounded-lg animate-ping opacity-20"></div>
-                                <div className="absolute inset-0 border-2 border-cyan-400 rounded-lg flex items-center justify-center overflow-hidden">
-                                    <div className="w-full h-1 bg-cyan-400 shadow-[0_0_15px_#06b6d4] absolute top-0 animate-[scan_2s_linear_infinite]"></div>
-                                    <Scan size={48} className="text-cyan-400" />
-                                </div>
-                            </div>
-                            <div>
-                                <h3 className="text-xl font-bold text-white font-sci-fi animate-pulse">VISION CORE ACTIVE</h3>
-                                <p className="text-cyan-400 font-mono text-xs mt-2">ANALYZING HANDWRITING VECTORS...</p>
-                            </div>
+            <div className="space-y-6 sm:space-y-8">
+                {/* Vision Grader Header */}
+                <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-6 sm:p-8 text-center relative overflow-hidden group">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent"></div>
+                    <div className="relative z-10 max-w-2xl mx-auto">
+                        <div className="w-16 h-16 bg-cyan-500/20 rounded-2xl border border-cyan-500/30 flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-500">
+                            <Scan size={32} className="text-cyan-400" />
                         </div>
-                    ) : (
-                        <div className="space-y-6 relative z-10">
-                          <div className={`w-32 h-32 bg-black/40 border-2 ${selectedFile ? 'border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.3)]' : 'border-dashed border-cyan-500/50'} rounded-2xl flex items-center justify-center mx-auto group-hover:border-cyan-400 group-hover:scale-105 transition-all shadow-[0_0_30px_rgba(0,0,0,0.3)]`}>
-                                <label className="cursor-pointer flex flex-col items-center justify-center" aria-label="Upload assignment">
-                                  {selectedFile ? (
-                                      <FileCheck size={48} className="text-cyan-400" />
-                                  ) : (
-                                      <Camera size={48} className="text-cyan-500/50 group-hover:text-cyan-400 transition-colors" />
-                                  )}
-                                  <input type="file" accept="image/*,application/pdf" onChange={handleFileChange} className="hidden" />
-                                </label>
-                          </div>
-                          <div>
-                              <h3 className="text-xl font-bold text-white font-sci-fi">
-                                  {selectedFile ? 'FILE READY' : 'UPLOAD ASSIGNMENT'}
-                              </h3>
-                              <p className="text-slate-400 font-mono text-xs mt-2">
-                                  {selectedFile ? selectedFile.name : 'Drag & Drop or Click to Scan Paper'}
-                              </p>
-                          </div>
-                            <div className="flex flex-col items-center justify-center gap-3">
-                              <button 
-                                onClick={handleGradeAssignment} 
-                                disabled={!selectedFile || isScanning}
-                                className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-8 py-3 rounded-xl font-bold font-sci-fi tracking-widest shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all"
-                              >
-                                  {isScanning ? 'ANALYZING...' : 'INITIATE SCAN'}
-                              </button>
-                              {uploadStatus !== 'idle' && (
-                                <span className={`text-xs font-mono ${uploadStatus==='success' ? 'text-emerald-400' : uploadStatus==='error' ? 'text-rose-400' : 'text-cyan-400'}`}>{uploadMsg}</span>
-                              )}
-                            </div>
+                        <h3 className="text-xl sm:text-2xl font-bold text-white font-sci-fi mb-3 tracking-widest uppercase">Vision Intelligence</h3>
+                        <p className="text-xs sm:text-sm text-slate-400 font-mono mb-8 leading-relaxed opacity-80">
+                            Upload a student assignment for deep structural analysis, automated grading, and qualitative feedback synthesis.
+                        </p>
+                        
+                        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                            <label className="w-full sm:w-auto px-8 py-4 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-bold font-sci-fi tracking-widest shadow-lg shadow-cyan-500/20 transition-all active:scale-95 cursor-pointer touch-manipulation flex items-center justify-center gap-3 group/btn">
+                                <Camera size={20} className="group-hover/btn:rotate-12 transition-transform" />
+                                SCAN ASSIGNMENT
+                                <input type="file" className="hidden" accept="image/*,.pdf" onChange={handleFileChange} />
+                            </label>
+                            <span className="text-[10px] font-mono text-slate-600 uppercase tracking-widest">or</span>
+                            <button className="w-full sm:w-auto px-8 py-4 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl font-bold font-sci-fi tracking-widest border border-white/10 transition-all active:scale-95 touch-manipulation flex items-center justify-center gap-3">
+                                <Upload size={20} />
+                                BROWSE FILES
+                            </button>
                         </div>
-                    )}
-                </div>
-
-                {/* Result Area */}
-                <div className="w-full lg:w-1/2 glass-panel p-0 rounded-2xl border border-white/10 flex flex-col overflow-hidden min-h-[400px]">
-                    <div className="p-4 border-b border-white/10 bg-black/20">
-                        <h3 className="font-bold text-white font-sci-fi flex items-center gap-2">
-                            <FileCheck size={18} className="text-emerald-400" />
-                            GRADING REPORT
-                        </h3>
-                    </div>
-                    
-                    <div className="flex-1 p-8 bg-slate-900/50 relative overflow-y-auto custom-scrollbar">
-                        {scanResult ? (
-                            <div className="space-y-6 animate-in slide-in-from-right-10 duration-500">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <p className="text-xs font-mono text-slate-400 uppercase">Student Identity</p>
-                                        <h3 className="text-xl font-bold text-white">{scanResult.student}</h3>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-xs font-mono text-slate-400 uppercase">Calculated Score</p>
-                                        <div className="text-4xl font-bold text-emerald-400 font-sci-fi">{scanResult.score}/100</div>
-                                    </div>
-                                </div>
-
-                                <div className="bg-white/5 border border-white/10 rounded-xl p-4 max-h-[300px] overflow-y-auto custom-scrollbar scroll-smooth pr-2">
-                                    <p className="text-xs font-mono text-cyan-400 uppercase mb-2">AI Analysis Feedback</p>
-                                    <div className="prose prose-invert prose-sm">
-                                        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{scanResult.feedback}</ReactMarkdown>
-                                    </div>
-                                </div>
-
-                                {scanResult.annotations && scanResult.annotations.length > 0 && (
-                                    <div className="space-y-2">
-                                        <p className="text-xs font-mono text-purple-400 uppercase">Key Annotations</p>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                            {scanResult.annotations.map((ann, idx) => (
-                                                <div key={idx} className="bg-purple-900/20 border border-purple-500/20 p-2 rounded-lg text-xs">
-                                                    <span className="font-bold text-purple-300">{ann.point}:</span> {ann.comment}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {scanResult.insights && (
-                                    <div className="bg-cyan-900/20 border border-cyan-500/20 p-4 rounded-xl space-y-3">
-                                        <p className="text-xs font-mono text-cyan-400 uppercase">Learning Insights</p>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <p className="text-[10px] text-slate-400 uppercase mb-1">Strengths</p>
-                                                <div className="flex flex-wrap gap-1">
-                                                    {scanResult.insights.strengths.map((s, i) => (
-                                                        <span key={i} className="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded text-[10px]">{s}</span>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] text-slate-400 uppercase mb-1">Focus Areas</p>
-                                                <div className="flex flex-wrap gap-1">
-                                                    {scanResult.insights.weaknesses.map((w, i) => (
-                                                        <span key={i} className="bg-rose-500/20 text-rose-400 px-2 py-0.5 rounded text-[10px]">{w}</span>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="pt-2 border-t border-cyan-500/10">
-                                            <p className="text-[10px] text-slate-400 uppercase mb-1">Recommendation</p>
-                                            <p className="text-xs text-white italic">"{scanResult.insights.recommendation}"</p>
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div className="flex flex-col sm:flex-row gap-3 pt-4">
-                                    <button 
-                                        onClick={() => setScanResult(null)}
-                                        className="flex-1 py-3 border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 rounded-xl font-bold font-sci-fi transition-all flex items-center justify-center gap-2"
-                                    >
-                                        <XCircle size={18} /> REJECT
-                                    </button>
-                                    <button className="flex-[2] py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold font-sci-fi shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all flex items-center justify-center gap-2">
-                                        <Save size={18} /> SAVE TO GRADEBOOK
-                                    </button>
-                                </div>
+                        
+                        {uploadMsg && (
+                            <div className={`mt-6 text-[10px] font-mono uppercase tracking-widest px-4 py-2 rounded-lg inline-block border ${
+                                uploadStatus === 'error' ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 
+                                uploadStatus === 'success' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 
+                                'text-cyan-400 bg-cyan-500/10 border-cyan-500/20'
+                            }`}>
+                                {uploadMsg}
                             </div>
-                        ) : (
-                            <div className="h-full flex flex-col items-center justify-center text-slate-600 opacity-50">
-                                <Scan size={64} className="mb-4" />
-                                <p className="font-mono text-sm">WAITING FOR SCANNED DATA...</p>
+                        )}
+                        
+                        {selectedFile && uploadStatus !== 'success' && (
+                            <div className="mt-8 flex justify-center">
+                                <button 
+                                    onClick={handleGradeAssignment}
+                                    disabled={isScanning}
+                                    className="px-10 py-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl font-bold font-sci-fi tracking-widest shadow-xl shadow-indigo-500/20 transition-all active:scale-95 touch-manipulation flex items-center gap-3"
+                                >
+                                    {isScanning ? (
+                                        <><span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> ANALYZING...</>
+                                    ) : (
+                                        <><Brain size={20} /> INITIATE AUTO-GRADE</>
+                                    )}
+                                </button>
                             </div>
                         )}
                     </div>
                 </div>
+
+                {/* Analysis Result */}
+                {scanResult && (
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 sm:gap-8 animate-in fade-in slide-in-from-top-4 duration-700">
+                        {/* Student Info & Score */}
+                        <div className="xl:col-span-1 space-y-6">
+                            <div className="rounded-2xl border border-white/5 bg-white/5 p-6 text-center overflow-hidden relative">
+                                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500 to-purple-500"></div>
+                                <h4 className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-6">Evaluation Summary</h4>
+                                <div className="w-32 h-32 rounded-full border-4 border-cyan-500/20 flex items-center justify-center mx-auto mb-6 relative">
+                                    <div className="absolute inset-0 rounded-full border-4 border-cyan-500 border-t-transparent animate-spin-slow"></div>
+                                    <span className="text-4xl font-bold text-white font-sci-fi">{scanResult.score}%</span>
+                                </div>
+                                <div className="text-xl font-bold text-white font-sci-fi tracking-wider mb-1 uppercase">{scanResult.student}</div>
+                                <div className="text-[10px] font-mono text-cyan-400 uppercase tracking-[0.2em] font-bold">A- Grade Status</div>
+                            </div>
+                            
+                            <div className="rounded-2xl border border-white/5 bg-white/5 p-6">
+                                <h4 className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                    <Zap size={14} className="text-amber-400" />
+                                    AI Insights
+                                </h4>
+                                <div className="space-y-6">
+                                    <div>
+                                        <div className="text-[9px] font-mono text-emerald-400 uppercase tracking-widest mb-3 font-bold">Key Strengths</div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {scanResult.insights?.strengths.map((s, i) => (
+                                                <span key={i} className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-md text-[10px] font-mono text-emerald-400 uppercase tracking-wider">{s}</span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div className="text-[9px] font-mono text-rose-400 uppercase tracking-widest mb-3 font-bold">Improvement Areas</div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {scanResult.insights?.weaknesses.map((w, i) => (
+                                                <span key={i} className="px-3 py-1 bg-rose-500/10 border border-rose-500/20 rounded-md text-[10px] font-mono text-rose-400 uppercase tracking-wider">{w}</span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Qualitative Feedback */}
+                        <div className="xl:col-span-2 space-y-6">
+                            <div className="rounded-2xl border border-white/5 bg-white/5 p-6 h-full">
+                                <h4 className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                    <FileCheck size={14} className="text-cyan-400" />
+                                    Detailed Qualitative Feedback
+                                </h4>
+                                <div className="prose prose-invert prose-sm max-w-none">
+                                    <p className="font-mono text-slate-300 leading-relaxed text-xs sm:text-sm whitespace-pre-wrap border-l-2 border-cyan-500/30 pl-6 py-2">
+                                        {scanResult.feedback}
+                                    </p>
+                                </div>
+                                
+                                <div className="mt-8 pt-8 border-t border-white/5">
+                                    <h5 className="text-[10px] font-mono text-indigo-400 uppercase tracking-widest mb-4 font-bold">Autonomous Recommendation</h5>
+                                    <div className="p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/10 font-mono text-[11px] text-slate-400 italic leading-relaxed">
+                                        "{scanResult.insights?.recommendation}"
+                                    </div>
+                                </div>
+                                
+                                <div className="mt-8 flex flex-wrap gap-4">
+                                    <button className="flex-1 px-6 py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-[10px] font-bold font-sci-fi tracking-widest shadow-lg shadow-cyan-500/20 transition-all active:scale-95 touch-manipulation uppercase">Push to Portal</button>
+                                    <button className="flex-1 px-6 py-3 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl text-[10px] font-bold font-sci-fi tracking-widest border border-white/10 transition-all active:scale-95 touch-manipulation uppercase">Generate Retest</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         )}
     </div>

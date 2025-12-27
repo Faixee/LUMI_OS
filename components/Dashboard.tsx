@@ -112,46 +112,38 @@ const Dashboard: React.FC<DashboardProps> = ({ students, insights, userRole, sch
   const modules = getModules();
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-1000">
-      
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-white/5 pb-6 relative tech-border gap-4">
+    <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-700">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-4xl md:text-6xl font-bold text-white font-sci-fi tracking-tight mb-2 flex items-center gap-3 uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] flex-wrap">
-             {schoolName ? schoolName : 'COMMAND CENTER'}
-             <span className="px-2 py-0.5 rounded text-[10px] border border-cyan-500 text-cyan-500 font-mono tracking-widest opacity-80 bg-cyan-950/30 whitespace-nowrap">v.3.0.1</span>
-          </h2>
-          <div className="flex items-center gap-3">
-             <div className="flex gap-1">
-                <span className="w-1 h-3 bg-emerald-500 rounded-sm animate-[pulse_1s_infinite]"></span>
-                <span className="w-1 h-3 bg-emerald-500/50 rounded-sm"></span>
-                <span className="w-1 h-3 bg-emerald-500/30 rounded-sm"></span>
-             </div>
-             <p className="text-cyan-400/60 font-mono text-sm tracking-wider uppercase flex items-center gap-2">
-               <Cpu size={14} /> System Optimal • Neural Link Active
-             </p>
-          </div>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white font-sci-fi tracking-wider text-glow truncate">
+            {schoolName || 'LUMIX OS'}
+          </h1>
+          <p className="text-slate-400 text-xs md:text-sm font-mono tracking-[0.2em] uppercase mt-1">
+            {userRole.toUpperCase()} COCKPIT
+          </p>
         </div>
-        
-        <div className="hidden md:block">
-            <div className="glass-panel px-6 py-4 flex items-center gap-6 rounded-xl border-t border-white/10">
-                <div className="text-right">
-                    <div className="text-3xl font-bold font-sci-fi text-white tracking-widest">{new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                    <div className="text-xs text-indigo-300 font-mono tracking-[0.2em] uppercase">{new Date().toLocaleDateString()}</div>
-                </div>
-                <div className="h-10 w-[1px] bg-white/10"></div>
-                <div className="flex flex-col items-center">
-                    <Signal size={20} className="text-emerald-400 animate-pulse" />
-                    <span className="text-[9px] text-emerald-400/80 font-mono mt-1">5ms</span>
-                </div>
-            </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-full shrink-0">
+            <Signal size={14} className="text-emerald-400" />
+            <span className="text-[10px] font-bold text-emerald-400 font-mono">SYSTEM ONLINE</span>
+          </div>
+          <div className="hidden sm:flex items-center gap-2 bg-slate-800/50 border border-white/5 px-3 py-1.5 rounded-full">
+            <Clock size={14} className="text-slate-400" />
+            <span className="text-[10px] font-bold text-slate-300 font-mono">
+              {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* 3D Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-        {stats.map((stat, idx) => (
-          <div key={idx} className={`holo-card p-6 group relative overflow-hidden transition-all duration-500`}>
+      {/* Metrics Grid */}
+      <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        {stats.map((stat, i) => (
+          <div 
+            key={i}
+            className={`p-4 sm:p-6 rounded-2xl sm:rounded-3xl border ${stat.borderColor} bg-[#0f172a]/40 backdrop-blur-xl hover:bg-[#0f172a]/60 transition-all duration-500 group relative overflow-hidden`}
+          >
             {/* Background Gradient Glow */}
             <div className={`absolute -right-10 -top-10 w-40 h-40 bg-gradient-to-br from-transparent to-${stat.color.split('-')[1]}-500/20 rounded-full blur-3xl group-hover:blur-2xl transition-all`}></div>
             

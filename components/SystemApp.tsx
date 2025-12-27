@@ -430,10 +430,32 @@ const SystemApp: React.FC = () => {
         onLogout={handleLogout}
       />
 
-      <main className={`flex-1 relative z-10 transition-all duration-300 flex flex-col ${isCockpit ? 'h-full overflow-hidden' : 'h-full overflow-y-auto overscroll-contain'} ${isSidebarOpen ? 'blur-sm md:blur-none' : ''} md:ml-72 min-w-0 p-4 md:p-8 ${isDemoUser ? 'mt-8' : ''}`}>
+      <main className={`flex-1 relative z-10 transition-all duration-300 flex flex-col ${isCockpit ? 'h-full overflow-hidden' : 'h-full overflow-y-auto overscroll-contain'} ${isSidebarOpen ? 'blur-sm md:blur-none' : ''} lg:ml-72 min-w-0 p-4 sm:p-6 lg:p-8 ${isDemoUser ? 'pt-16 sm:pt-20 lg:pt-12' : ''}`}>
+        {/* Mobile Header & Controls */}
+        <div className="flex lg:hidden items-center justify-between mb-6 shrink-0 bg-black/20 backdrop-blur-md p-3 rounded-2xl border border-white/5 sticky top-0 z-[50]">
+          <button 
+            onClick={() => setIsSidebarOpen(true)}
+            className="p-2.5 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 text-slate-300 transition-all active:scale-90 touch-manipulation"
+          >
+            <Menu size={20} />
+          </button>
+          
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <div className="text-[10px] font-bold text-white font-sci-fi tracking-wider uppercase truncate max-w-[120px]">{userName}</div>
+              <div className="text-[9px] font-mono text-cyan-400 uppercase tracking-widest">{userRole}</div>
+            </div>
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500 to-purple-500 p-[1px]">
+              <div className="w-full h-full rounded-[11px] bg-[#030014] flex items-center justify-center overflow-hidden">
+                <UserCircle2 size={20} className="text-white/70" />
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Developer God Mode Switcher */}
         {initialRole === 'developer' && (
-          <div className="fixed top-4 right-24 z-[60] flex items-center gap-3 bg-purple-900/40 backdrop-blur-md border border-purple-500/30 p-2 rounded-xl">
+          <div className="fixed bottom-24 right-4 lg:top-4 lg:right-24 z-[60] flex items-center gap-3 bg-purple-900/60 lg:bg-purple-900/40 backdrop-blur-md border border-purple-500/30 p-2 rounded-xl shadow-2xl">
             <div className="flex items-center gap-2 px-2 border-r border-white/10">
               <Shield size={14} className="text-purple-400 animate-pulse" />
               <span className="text-[10px] font-mono font-bold text-purple-300 uppercase tracking-widest">Dev Mode</span>

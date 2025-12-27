@@ -16,6 +16,14 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, userRole, schoolConfig, isOpen, onClose, onLogout, isDemo }) => {
   
+  // Close sidebar on mobile when navigating
+  const handleViewChange = (view: string) => {
+    onChangeView(view);
+    if (window.innerWidth < 1024) {
+      onClose();
+    }
+  };
+
   const getMenuItems = () => {
     let items = [];
     const common = [
@@ -105,7 +113,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, userRole, 
       {/* Mobile Backdrop */}
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
+          className="fixed inset-0 bg-black/80 backdrop-blur-md z-40 lg:hidden"
           onClick={onClose}
         />
       )}
@@ -119,7 +127,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, userRole, 
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         
         /* Desktop: Floating card style */
-        md:translate-x-0 md:top-4 md:left-4 md:h-[calc(100vh-2rem)] md:w-64 md:rounded-3xl md:border-white/10
+        lg:translate-x-0 lg:top-4 lg:left-4 lg:h-[calc(100vh-2rem)] lg:w-64 lg:rounded-3xl lg:border-white/10
       `}>
         
         {/* Sidebar Header with Glow */}
@@ -167,7 +175,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, userRole, 
             {/* Mobile Close Button */}
             <button 
               onClick={onClose}
-              className="md:hidden text-slate-400 hover:text-white"
+              className="lg:hidden text-slate-400 hover:text-white"
             >
               <X size={20} />
             </button>
@@ -181,8 +189,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, userRole, 
               return (
                   <button
                       key={`${item.id}-${idx}`}
-                      onClick={() => { onChangeView(item.id); onClose(); }}
-                      className={`group w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 relative overflow-hidden ${
+                      onClick={() => handleViewChange(item.id)}
+                      className={`group w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 relative overflow-hidden touch-manipulation active:scale-95 ${
                       isActive
                           ? 'bg-white/5 border border-white/10 shadow-[inset_0_0_20px_rgba(255,255,255,0.02)] translate-x-1'
                           : 'text-slate-500 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/5 hover:translate-x-1'
