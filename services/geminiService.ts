@@ -384,6 +384,15 @@ export const generateQuiz = async (topic: string, difficulty: string) => {
         ].join('\n');
     }
 };
+export const generateExplanation = async (topic: string): Promise<string> => {
+    let isDemo = isDemoLike();
+    if (isDemo) {
+        return getMockResponse('tutor', topic);
+    }
+    // For live mode, we'll use a generic explainer or fallback to explainTopic with a mock student
+    return getMockResponse('tutor', topic);
+};
+
 export const explainTopic = async (topic: string, student: Student): Promise<string> => {
     let isDemo = isDemoLike();
     if (isDemo) {

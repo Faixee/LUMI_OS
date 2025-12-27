@@ -34,3 +34,6 @@ __pycache__/
 # Local DB / data
 data/
 *.db
+
+.vercel
+.env*.local
