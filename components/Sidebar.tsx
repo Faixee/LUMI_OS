@@ -1,6 +1,11 @@
 
+/**
+ * LUMIX OS - NAVIGATION ARCHITECTURE
+ * Created by: Faizain Murtuza
+ * © 2025 Faizain Murtuza. All Rights Reserved.
+ */
 import React from 'react';
-import { LayoutDashboard, Users, Activity, Cpu, Radio, School, DollarSign, BookOpen, GraduationCap, Calendar, Bell, Database, Bus, Library, Settings, Brain, Shield, X, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, Activity, Cpu, Radio, School, DollarSign, BookOpen, GraduationCap, Calendar, Bell, Database, Bus, Library, Settings, Brain, Shield, X, LogOut, ChevronDown, Info } from 'lucide-react';
 import { UserRole, SchoolConfig } from '../types';
 
 interface SidebarProps {
@@ -12,9 +17,11 @@ interface SidebarProps {
   onClose: () => void;
   onLogout: () => void;
   isDemo?: boolean;
+  initialRole?: UserRole;
+  onRoleSwitch?: (e: React.ChangeEvent<HTMLSelectElement>) => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, userRole, schoolConfig, isOpen, onClose, onLogout, isDemo }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, userRole, schoolConfig, isOpen, onClose, onLogout, isDemo, initialRole, onRoleSwitch }) => {
   
   // Close sidebar on mobile when navigating
   const handleViewChange = (view: string) => {
@@ -28,6 +35,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, userRole, 
     let items = [];
     const common = [
         { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+        { id: 'about', label: 'Architecture', icon: <Info size={20} /> },
     ];
 
     if (userRole === 'admin' || userRole === 'developer') {
@@ -95,8 +103,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, userRole, 
 
     // Restrict premium/admin features in Demo Mode
     if (isDemo) {
-        const restrictedIds = ['genesis', 'nexus', 'agents', 'system-config', 'analytics'];
-        return items.filter(item => !restrictedIds.includes(item.id));
+        // Free/Demo users: Access ONLY to basic dashboard and architecture
+        // They interact with Nova via the global chat icon
+        const allowedDemoIds = ['dashboard', 'about'];
+        return items.filter(item => allowedDemoIds.includes(item.id));
     }
 
     return items;
@@ -222,6 +232,29 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, userRole, 
 
         {/* Footer Info & Logout */}
         <div className="p-4 bg-black/40 backdrop-blur-md border-t border-white/5 shrink-0 space-y-3">
+          {initialRole === 'developer' && (
+            <div className="flex flex-col gap-2 p-3 bg-purple-900/20 border border-purple-500/20 rounded-xl">
+              <div className="flex items-center gap-2">
+                <Shield size={12} className="text-purple-400 animate-pulse" />
+                <span className="text-[9px] font-mono font-bold text-purple-300 uppercase tracking-widest">System Mode</span>
+              </div>
+              <div className="relative group">
+                <select 
+                  value={userRole}
+                  onChange={onRoleSwitch}
+                  className="w-full bg-black/40 text-white font-mono text-[10px] p-2 rounded-lg outline-none cursor-pointer border border-white/5 hover:border-purple-500/30 transition-all uppercase tracking-tighter"
+                >
+                  <option value="developer" className="bg-[#030014]">GOD MODE (DEV)</option>
+                  <option value="admin" className="bg-[#030014]">ADMIN PORTAL</option>
+                  <option value="teacher" className="bg-[#030014]">TEACHER PORTAL</option>
+                  <option value="student" className="bg-[#030014]">STUDENT PORTAL</option>
+                  <option value="parent" className="bg-[#030014]">PARENT PORTAL</option>
+                </select>
+                <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-purple-400 pointer-events-none" />
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center gap-3 text-cyan-500/80 text-[10px] font-mono bg-cyan-950/20 border border-cyan-500/20 p-2 rounded-lg">
             <Radio size={12} className="animate-pulse" />
             <span className="tracking-widest flex-1">NET: SECURE</span>

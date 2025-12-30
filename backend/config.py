@@ -1,3 +1,9 @@
+"""
+LUMIX OS - Advanced Intelligence-First SMS
+Created by: Faizain Murtuza
+© 2025 Faizain Murtuza. All Rights Reserved.
+"""
+
 import os
 from dotenv import load_dotenv
 
@@ -9,12 +15,12 @@ class Settings:
     ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
     REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
     DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost/lumios_db")
-    CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001,http://127.0.0.1:8000,http://localhost:8000,https://lumi-os-omega.vercel.app").split(",")
+    CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001,http://127.0.0.1:8000,http://localhost:8000,http://localhost:54322,http://127.0.0.1:54322,https://lumi-os-omega.vercel.app").split(",")
     
     # In non-production, be more permissive with CORS if needed
     if os.getenv("ENVIRONMENT") != "production":
         # Add common dev ports if not present
-        dev_ports = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "http://127.0.0.1:3001"]
+        dev_ports = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "http://127.0.0.1:3001", "http://localhost:54322", "http://127.0.0.1:54322"]
         for port in dev_ports:
             if port not in CORS_ORIGINS:
                 CORS_ORIGINS.append(port)
@@ -23,7 +29,7 @@ class Settings:
         "X-Content-Type-Options": "nosniff",
         "X-XSS-Protection": "1; mode=block",
         "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-        "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' http://localhost:8000 http://127.0.0.1:8000 http://localhost:3000 http://127.0.0.1:3000 http://localhost:3001 http://127.0.0.1:3001 https://*.vercel.app https://lumi-os-omega.vercel.app; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net"
+        "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' http://localhost:8000 http://127.0.0.1:8000 http://localhost:54322 http://127.0.0.1:54322 http://localhost:3000 http://127.0.0.1:3000 http://localhost:3001 http://127.0.0.1:3001 https://*.vercel.app https://lumi-os-omega.vercel.app; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net"
     }
     RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "10"))
     RATE_LIMIT_STORAGE_URI = os.getenv("RATE_LIMIT_STORAGE_URI", "memory://")

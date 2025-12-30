@@ -1,4 +1,9 @@
 
+/**
+ * LUMIX OS - INTELLIGENT DASHBOARD
+ * Created by: Faizain Murtuza
+ * © 2025 Faizain Murtuza. All Rights Reserved.
+ */
 import React, { useMemo } from 'react';
 import { Student, DashboardMetrics, Insight, UserRole } from '../types';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -273,13 +278,19 @@ const Dashboard: React.FC<DashboardProps> = ({ students, insights, userRole, sch
         </div>
 
         {/* System Capability Monitor */}
-        <div className="holo-card p-6 flex flex-col relative overflow-hidden h-full">
-            <h3 className="text-lg font-bold text-white font-sci-fi mb-6 flex items-center gap-2 relative z-10">
-                <Shield size={20} className="text-purple-400" />
-                SYSTEM CAPABILITIES
-            </h3>
+        <div className="holo-card p-0 flex flex-col relative overflow-hidden h-full tech-border">
+            <div className="p-6 border-b border-white/5 flex items-center gap-3 bg-white/2 backdrop-blur-sm relative z-10">
+                <div className="p-2 bg-purple-500/10 rounded-lg">
+                    <Shield size={20} className="text-purple-400" />
+                </div>
+                <div>
+                    <h3 className="text-lg font-bold text-white font-sci-fi tracking-wide">SYSTEM CAPABILITIES</h3>
+                    <p className="text-[10px] text-slate-500 font-mono uppercase">Neural Network Status</p>
+                </div>
+            </div>
 
-            <div className="space-y-4 relative z-10 flex-1">
+            <div className="p-6 flex flex-col flex-1">
+                <div className="space-y-4 relative z-10">
                 {[
                     { label: 'Identity Core', count: metrics.totalStudents, active: true, icon: Users, color: 'text-emerald-400', border: 'border-emerald-500/30' },
                     { label: 'Astra Predictions', status: dataHealth.hasGPA ? 'ACTIVE' : 'OFFLINE', active: dataHealth.hasGPA, icon: Target, color: 'text-indigo-400', border: 'border-indigo-500/30' },
@@ -300,7 +311,7 @@ const Dashboard: React.FC<DashboardProps> = ({ students, insights, userRole, sch
                 ))}
             </div>
             
-            <div className="mt-auto pt-6">
+            <div className="mt-auto pt-6 relative z-10">
                 <div className="flex justify-between text-[10px] text-slate-400 font-mono mb-2 uppercase">
                     <span>Data Integrity</span>
                     <span className="text-cyan-400">{dataHealth.score}%</span>
@@ -309,6 +320,7 @@ const Dashboard: React.FC<DashboardProps> = ({ students, insights, userRole, sch
                     <div className="h-full bg-gradient-to-r from-purple-500 to-cyan-500 transition-all duration-1000 shadow-[0_0_10px_#06b6d4]" style={{ width: `${dataHealth.score}%` }}></div>
                 </div>
             </div>
+          </div>
         </div>
       </div>
     </div>

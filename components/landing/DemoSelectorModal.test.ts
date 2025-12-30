@@ -1,4 +1,10 @@
 /**
+ * LUMIX OS - Advanced Intelligence-First SMS
+ * Created by: Faizain Murtuza
+ * © 2025 Faizain Murtuza. All Rights Reserved.
+ */
+
+/**
  * @file DemoSelectorModal.test.ts
  * @description Unit tests for the DemoSelectorModal selection scenarios.
  * Note: These tests are designed for a Vitest/Jest environment.

@@ -1,3 +1,9 @@
+/**
+ * LUMIX OS - Advanced Intelligence-First SMS
+ * Created by: Faizain Murtuza
+ * © 2025 Faizain Murtuza. All Rights Reserved.
+ */
+
 const getApiUrl = () => {
     if (typeof window !== 'undefined') {
         const hostname = window.location.hostname;
@@ -11,7 +17,7 @@ const getApiUrl = () => {
     }
     const envUrl = (import.meta as any).env?.VITE_API_URL;
     if (envUrl) return envUrl;
-    return 'http://127.0.0.1:8000';
+    return 'http://localhost:54322';
 };
 
 const API_URL = getApiUrl();
@@ -71,6 +77,31 @@ export const authService = {
         return await res.json();
     },
 
+    devUnlock: async (email: string, secret: string): Promise<any> => {
+        let res: Response;
+        try {
+            res = await fetch(`${API_URL}/internal/dev/unlock`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-Internal-Dev-Secret': secret
+                },
+                body: JSON.stringify({ email })
+            });
+        } catch {
+            throw new Error('Network error: Failed to reach dev unlock endpoint.');
+        }
+        if (!res.ok) {
+            try { 
+                const err = await res.json(); 
+                throw new Error(err.detail || 'Developer unlock failed'); 
+            } catch { 
+                throw new Error('Developer unlock failed'); 
+            }
+        }
+        return await res.json();
+    },
+
     emailLogin: async (email: string): Promise<any> => {
         // Since we don't have a real email service, we'll simulate a magic link sent
         // In a real app, this would call an endpoint to send a magic link
@@ -98,6 +129,7 @@ export const authService = {
 
     logout: () => {
         sessionStorage.removeItem('allow_login_access');
+        sessionStorage.removeItem('lumix_demo_init_active');
         const prefix = 'lumix_demo_ai_quota:';
         try {
             for (let i = sessionStorage.length - 1; i >= 0; i--) {
@@ -115,10 +147,12 @@ export const authService = {
         localStorage.removeItem('lumix_role');
         localStorage.removeItem('lumix_user');
         localStorage.removeItem('lumix_subscription');
+        localStorage.removeItem('lumix_mode');
         sessionStorage.removeItem('lumix_token');
         sessionStorage.removeItem('lumix_role');
         sessionStorage.removeItem('lumix_user');
         sessionStorage.removeItem('lumix_subscription');
+        sessionStorage.removeItem('lumix_mode');
     },
 
     getUser: () => {
@@ -126,11 +160,12 @@ export const authService = {
         const role = localStorage.getItem('lumix_role') || sessionStorage.getItem('lumix_role');
         const name = localStorage.getItem('lumix_user') || sessionStorage.getItem('lumix_user');
         const subscription = localStorage.getItem('lumix_subscription') || sessionStorage.getItem('lumix_subscription');
+        const mode = localStorage.getItem('lumix_mode') || sessionStorage.getItem('lumix_mode');
         
         // Clean up stringified nulls/undefineds
         const cleanToken = (token === 'null' || token === 'undefined') ? null : token;
         
-        return { token: cleanToken, role, name, subscription };
+        return { token: cleanToken, role, name, subscription, mode };
     },
 
     isAuthenticated: () => {
@@ -144,5 +179,34 @@ export const authService = {
         store.setItem('lumix_role', role);
         store.setItem('lumix_user', name);
         store.setItem('lumix_subscription', subscription);
+    },
+
+    simulatePaymentSuccess: (plan: string) => {
+        const user = authService.getUser();
+        if (user.token) {
+            const subscription = plan.toLowerCase().includes('god') ? 'enterprise' : (plan.toLowerCase().includes('ascension') ? 'pro' : 'active');
+            localStorage.setItem('lumix_subscription', subscription);
+            sessionStorage.setItem('lumix_subscription', subscription);
+            authService.logAudit('PAYMENT_VERIFIED', { plan, subscription });
+            return true;
+        }
+        return false;
+    },
+
+    logAudit: (event: string, details: any = {}) => {
+        try {
+            const logs = JSON.parse(localStorage.getItem('lumix_audit_logs') || '[]');
+            logs.unshift({
+                timestamp: new Date().toISOString(),
+                event,
+                ...details,
+                url: window.location.href,
+                userAgent: navigator.userAgent
+            });
+            // Keep last 100 logs
+            localStorage.setItem('lumix_audit_logs', JSON.stringify(logs.slice(0, 100)));
+        } catch (e) {
+            console.error('Audit log failed', e);
+        }
     }
 };

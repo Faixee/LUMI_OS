@@ -1,3 +1,9 @@
+/**
+ * LUMIX OS - Advanced Intelligence-First SMS
+ * Created by: Faizain Murtuza
+ * © 2025 Faizain Murtuza. All Rights Reserved.
+ */
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
@@ -15,6 +21,7 @@ import DataNexus from './DataNexus';
 import TransportView from './TransportView';
 import LibraryView from './LibraryView';
 import SubscriptionView from './SubscriptionView';
+import AboutPage from './AboutPage';
 import SystemConfig from './SystemConfig';
 import GenesisEngine from './GenesisEngine';
 import {
@@ -90,9 +97,16 @@ const SystemApp: React.FC = () => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent)?.detail || {};
       if (detail?.type === 'auth' && detail?.status === 401) {
+        const isDev = userRole === 'developer';
         authService.logout();
         setIsAuthenticated(false);
-        navigate('/login', { replace: true });
+        
+        if (isDev) {
+            // Developers go back to dev login, not standard login
+            navigate('/dev', { replace: true });
+        } else {
+            navigate('/login', { replace: true });
+        }
         return;
       }
 
@@ -105,7 +119,7 @@ const SystemApp: React.FC = () => {
 
     window.addEventListener('lumix:access', handler as any);
     return () => window.removeEventListener('lumix:access', handler as any);
-  }, [navigate]);
+  }, [navigate, userRole]);
 
   useEffect(() => {
     if (!isAuthenticated || isDemoUser) return;
@@ -286,6 +300,28 @@ const SystemApp: React.FC = () => {
 
   // --- Render Content with Paid/Demo logic ---
   const renderContent = () => {
+    // Stricter Demo Mode: Only allow dashboard and about
+    const allowedDemoViews = ['dashboard', 'about', 'subscription'];
+    if (isDemoUser && !allowedDemoViews.includes(currentView)) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-[#0B1120] rounded-3xl border border-white/5">
+                <div className="w-20 h-20 bg-amber-500/20 rounded-2xl flex items-center justify-center mb-6 border border-amber-500/30">
+                    <Shield className="text-amber-500" size={40} />
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-4">Premium Feature Locked</h2>
+                <p className="text-slate-400 max-w-md mb-8">
+                    You are currently in Demo Mode. Features like Genesis Engine, AI Tutor, and Advanced Analytics are reserved for paid subscribers.
+                </p>
+                <button 
+                    onClick={() => setCurrentView('subscription')}
+                    className="px-8 py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-xl font-bold hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
+                >
+                    UPGRADE TO UNLOCK
+                </button>
+            </div>
+        );
+    }
+
     switch (currentView) {
       case 'dashboard':
         return <Dashboard students={students} insights={insights} userRole={userRole} schoolName={schoolConfig?.name} onNavigate={setCurrentView} />;
@@ -312,7 +348,7 @@ const SystemApp: React.FC = () => {
       case 'assistant':
         return <TeacherAITools />;
       case 'ai-tutor':
-        return <StudentAITutor />;
+        return <StudentAITutor students={students} />;
       case 'ai-guardian':
         return <ParentAIGuardian />;
       case 'nexus':
@@ -323,6 +359,8 @@ const SystemApp: React.FC = () => {
         return <LibraryView books={library} />;
       case 'subscription':
         return <SubscriptionView />;
+      case 'about':
+        return <AboutPage />;
       case 'system-config':
         return <SystemConfig currentConfig={schoolConfig} onUpdateConfig={handleSchoolConfigUpdate} />;
       default:
@@ -428,6 +466,8 @@ const SystemApp: React.FC = () => {
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
         onLogout={handleLogout}
+        initialRole={initialRole}
+        onRoleSwitch={handleRoleSwitch}
       />
 
       <main className={`flex-1 relative z-10 transition-all duration-300 flex flex-col ${isCockpit ? 'lg:h-full lg:overflow-hidden overflow-y-auto' : 'h-full overflow-y-auto overscroll-contain'} ${isSidebarOpen ? 'blur-sm md:blur-none' : ''} lg:ml-72 min-w-0 p-4 sm:p-6 lg:p-8 ${isDemoUser ? 'pt-16 sm:pt-20 lg:pt-12' : ''}`}>
@@ -453,34 +493,38 @@ const SystemApp: React.FC = () => {
           </div>
         </div>
 
-        {/* Developer God Mode Switcher */}
-        {initialRole === 'developer' && (
-          <div className="fixed bottom-24 right-4 lg:top-4 lg:right-24 z-[60] flex items-center gap-3 bg-purple-900/60 lg:bg-purple-900/40 backdrop-blur-md border border-purple-500/30 p-2 rounded-xl shadow-2xl">
-            <div className="flex items-center gap-2 px-2 border-r border-white/10">
-              <Shield size={14} className="text-purple-400 animate-pulse" />
-              <span className="text-[10px] font-mono font-bold text-purple-300 uppercase tracking-widest">Dev Mode</span>
-            </div>
-            <select 
-              value={userRole}
-              onChange={handleRoleSwitch}
-              className="bg-transparent text-white font-mono text-[10px] outline-none cursor-pointer hover:text-purple-400 transition-colors"
-            >
-              <option value="developer" className="bg-[#030014]">GOD MODE (DEV)</option>
-              <option value="admin" className="bg-[#030014]">ADMIN</option>
-              <option value="teacher" className="bg-[#030014]">TEACHER</option>
-              <option value="student" className="bg-[#030014]">STUDENT</option>
-              <option value="parent" className="bg-[#030014]">PARENT</option>
-            </select>
-          </div>
-        )}
+        <div className="flex-1 flex flex-col">
+          {renderContent()}
+        </div>
 
-        {/* Top Bar, Chat, Logout etc. (keep same as original code) */}
-        {renderContent()}
+        {/* Persistent Footer */}
+        <footer className="mt-8 pt-6 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-4 text-[10px] font-mono text-slate-500 uppercase tracking-[0.2em]">
+          <div>System Created by Faizain Murtuza &copy; {new Date().getFullYear()}</div>
+          <div className="flex gap-6">
+            <button onClick={() => setCurrentView('about')} className="hover:text-cyan-400 transition-colors">Architecture</button>
+            <span className="text-white/10">|</span>
+            <span className="text-cyan-400/50">LUMIX CORE V1.0</span>
+          </div>
+        </footer>
       </main>
 
       {/* Floating Chat Agent */}
       {/* ... keep your existing chat UI code here ... */}
 
+      {/* Subtle Watermark Branding */}
+      <div className="fixed bottom-6 right-24 pointer-events-none opacity-[0.03] select-none z-0 hidden lg:block">
+          <div className="text-[60px] font-black font-sci-fi tracking-tighter text-white uppercase">
+              MURTUZA_CORE
+          </div>
+      </div>
+
+      {/* Subtle UI Watermark */}
+      <div className="fixed bottom-4 right-4 z-[100] pointer-events-none select-none opacity-10 hover:opacity-30 transition-opacity duration-700">
+        <div className="flex flex-col items-end">
+          <div className="text-[10px] font-sci-fi tracking-[0.3em] text-white uppercase">LUMIX OS</div>
+          <div className="text-[7px] font-mono text-cyan-400 uppercase tracking-widest">Authored by Faizain Murtuza</div>
+        </div>
+      </div>
     </div>
   );
 };

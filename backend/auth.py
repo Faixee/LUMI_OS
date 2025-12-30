@@ -1,3 +1,9 @@
+"""
+LUMIX OS - Advanced Intelligence-First SMS
+Created by: Faizain Murtuza
+© 2025 Faizain Murtuza. All Rights Reserved.
+"""
+
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict
 import hashlib
@@ -57,6 +63,7 @@ FEATURE_MIN_PLAN: Dict[str, str] = {
     "ai_chat": "basic",
     "ai_quiz": "basic",
     "ai_explain": "basic",
+    "ai_grade": "basic",
     "ai_neural_explain": "basic",
     "ai_finance": "pro",
     "ai_predict": "pro",
@@ -248,6 +255,9 @@ def create_dev_access_token(
         expires_delta=(expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)),
     )
 
+def is_production() -> bool:
+    return settings.ENVIRONMENT == "production"
+
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(database.get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -272,6 +282,35 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
     role = (payload.get("role") or "").strip().lower()
     sub_status = (payload.get("subscription_status") or "").strip().lower()
+    
+    # DEV MODE SEGREGATION
+    is_unlocked_dev = bool(payload.get("unlocked"))
+    if is_unlocked_dev:
+        if role != "developer":
+             logger.warning(f"Dev token used with non-developer role: {role}")
+             raise credentials_exception
+        
+        allow = _developer_email_allowlist()
+        email = (payload.get("email") or "").strip().lower()
+        if not email or email not in allow:
+            logger.warning(f"Developer email not in allowlist: {email}")
+            raise credentials_exception
+            
+        return SimpleNamespace(
+            id=None,
+            username=username,
+            full_name=(payload.get("name") or "Developer Session"),
+            role="developer",
+            school_id=(payload.get("school_id") or "default"),
+            subscription_status="active",
+            subscription_expiry=None,
+            plan="enterprise",
+            is_suspended=False,
+            token_version=0,
+            profile=SimpleNamespace(email=email),
+            is_developer=True
+        )
+
     if role == "demo" and sub_status == "demo":
         return SimpleNamespace(
             id=None,
@@ -285,26 +324,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
             is_suspended=False,
             token_version=0,
             profile=None,
-        )
-
-    if role == "developer" and bool(payload.get("unlocked")):
-        allow = _developer_email_allowlist()
-        email = (payload.get("email") or "").strip().lower()
-        if not email or email not in allow:
-            logger.warning(f"Developer email not in allowlist: {email}")
-            raise credentials_exception
-        return SimpleNamespace(
-            id=None,
-            username=username,
-            full_name=(payload.get("name") or "Developer Session"),
-            role="developer",
-            school_id=(payload.get("school_id") or "default"),
-            subscription_status="active",
-            subscription_expiry=None,
-            plan="enterprise",
-            is_suspended=False,
-            token_version=0,
-            profile=SimpleNamespace(email=email),
+            is_developer=False
         )
 
     user = db.query(models.User).filter(models.User.username == username).first()
@@ -316,6 +336,8 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if token_tv is not None and int(token_tv) != int(getattr(user, "token_version", 0) or 0):
         logger.warning(f"Token version mismatch. Token: {token_tv}, DB: {getattr(user, 'token_version', 0)}")
         raise credentials_exception
+    
+    user.is_developer = False
     return user
 
 from fastapi import Request
@@ -343,6 +365,14 @@ def get_current_user_optional(token: Optional[str] = Depends(get_token_optional)
 def get_current_active_user(current_user: models.User = Depends(get_current_user)):
     if getattr(current_user, "is_suspended", False):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account suspended")
+    return current_user
+
+def get_current_paid_user(current_user: models.User = Depends(get_current_active_user)):
+    if not is_subscription_active(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Active subscription required to access this feature"
+        )
     return current_user
 
 class RoleChecker:
@@ -402,17 +432,20 @@ class FeatureAccess:
         self.allowed_roles = allowed_roles
 
     def __call__(self, user: models.User = Depends(get_current_active_user), db: Session = Depends(database.get_db)):
-        if is_developer_user(user) or is_demo_session(user):
+        if is_developer_user(user):
+            return user
+
+        # FREE USER RESTRICTION: Only allow 'ai_chat' (Nova chatbot)
+        if is_demo_user(user) or not is_subscription_active(user):
+            if self.feature != "ai_chat":
+                 raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=_error_detail("PAID_SUBSCRIPTION_REQUIRED", f"Feature '{self.feature}' requires an active subscription")
+                )
             return user
 
         if self.allowed_roles and (user.role or "") not in self.allowed_roles:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Operation not permitted")
-
-        if is_demo_user(user) or not is_subscription_active(user):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=_error_detail("PAID_SUBSCRIPTION_REQUIRED", "Active subscription required"),
-            )
 
         required_plan = FEATURE_MIN_PLAN.get(self.feature, "enterprise")
         user_plan = effective_plan(user)
@@ -427,10 +460,10 @@ class FeatureAccess:
             daily_limit = limits_by_plan.get(user_plan)
             if daily_limit is not None:
                 if getattr(user, "id", None) is None:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail=_error_detail("PAID_SUBSCRIPTION_REQUIRED", "Active subscription required"),
-                    )
+                    # If user has no ID (e.g. demo user), we might need a session-based limit
+                    # For now, demo users aren't counted in UsageCounter if they don't have ID
+                    return user
+                    
                 period = datetime.utcnow().strftime("%Y-%m-%d")
                 row = (
                     db.query(models.UsageCounter)
@@ -452,3 +485,23 @@ class FeatureAccess:
                 db.commit()
 
         return user
+
+
+class DeveloperGuard:
+    def __call__(self, user: models.User = Depends(get_current_active_user)):
+        if not is_developer_user(user) or not getattr(user, "is_developer", False):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=_error_detail("DEVELOPER_ACCESS_REQUIRED", "Exclusive developer access required")
+            )
+        return user
+
+
+class DemoOnlyGuard:
+    def __call__(self, user: models.User = Depends(get_current_active_user)):
+        if is_demo_user(user):
+            return user
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_error_detail("DEMO_ONLY_FEATURE", "This feature is only for demo users")
+        )

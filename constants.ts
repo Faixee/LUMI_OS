@@ -1,3 +1,9 @@
+/**
+ * LUMIX OS - Advanced Intelligence-First SMS
+ * Created by: Faizain Murtuza
+ * © 2025 Faizain Murtuza. All Rights Reserved.
+ */
+
 
 import { Student, FeeRecord, ClassSession, Assignment, TransportRoute, LibraryBook, UserRole } from './types';
 

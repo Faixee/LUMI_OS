@@ -1,3 +1,8 @@
+/**
+ * LUMIX OS - MAIN ENTRY POINT
+ * Created by: Faizain Murtuza
+ * © 2025 Faizain Murtuza. All Rights Reserved.
+ */
 import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams, useLocation } from 'react-router-dom';
 import LandingPage from './components/LandingPage';
@@ -5,6 +10,7 @@ import LoginView from './components/LoginView';
 import SystemApp from './components/SystemApp';
 import SubscriptionView from './components/SubscriptionView';
 import DevLogin from './components/DevLogin';
+import AboutPage from './components/AboutPage';
 import { authService } from './services/auth';
 
 // Demo Handler Component
@@ -16,16 +22,23 @@ const DemoHandler = () => {
     // Parse the dashboard type from query parameters
     const queryParams = new URLSearchParams(location.search);
     const dashboardType = queryParams.get('type') || 'development';
+    const isExplicitInit = sessionStorage.getItem('lumix_demo_init_active') === 'true';
 
     React.useEffect(() => {
         const run = async () => {
+            // Security: Prevent direct URL access to demo mode
+            if (!isExplicitInit) {
+                authService.logAudit('SECURITY_VIOLATION', { detail: 'Unauthorized demo access attempt via URL manipulation' });
+                navigate('/', { replace: true });
+                return;
+            }
+
             // No backend login needed for demo mode as per user request
             // Directly set demo credentials in session storage
             const targetRole = role || 'admin';
             const demoName = dashboardType === 'paid' ? "LumiX Premium User" : "LumiX Demo User";
             
-            // Map dashboard type to subscription status and token
-            // 'demo' triggers development/free logic, 'pro' triggers paid logic
+            // Mapping for demo mode based on dashboard type
             const subStatus = dashboardType === 'paid' ? 'pro' : 'demo';
             const demoToken = dashboardType === 'paid' ? 'premium_demo_token' : 'demo_session_token';
             
@@ -34,12 +47,19 @@ const DemoHandler = () => {
             store.setItem('lumix_role', targetRole);
             store.setItem('lumix_user', demoName);
             store.setItem('lumix_subscription', subStatus);
+            store.setItem('lumix_mode', 'demo'); // Explicit mode flag
+            
+            // SECURITY: Clear the initialization flag after use to prevent re-use or bookmarks
+            sessionStorage.removeItem('lumix_demo_init_active');
             
             // Clear any real user data
             localStorage.removeItem('lumix_token');
             localStorage.removeItem('lumix_role');
             localStorage.removeItem('lumix_user');
             localStorage.removeItem('lumix_subscription');
+            localStorage.removeItem('lumix_mode');
+
+            authService.logAudit('DEMO_INITIALIZED', { role: targetRole, type: dashboardType });
             
             // Small delay to show initialization UI
             setTimeout(() => {
@@ -47,7 +67,9 @@ const DemoHandler = () => {
             }, 800);
         };
         run();
-    }, [navigate, role, dashboardType]);
+    }, [navigate, role, dashboardType, isExplicitInit]);
+
+    if (!isExplicitInit) return null;
     return (
         <div className="flex items-center justify-center h-screen bg-[#030014] text-white font-mono">
             <div className="animate-pulse text-cyan-400 flex flex-col items-center gap-4">
@@ -71,11 +93,29 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     
     const subscription = (user.subscription || '').toLowerCase().trim();
     const role = (user.role || '').toLowerCase().trim();
-    const isPaid = ['active', 'enterprise', 'pro', 'basic', 'demo'].includes(subscription);
-    const isDev = ['developer', 'owner', 'admin'].includes(role) || role === 'demo';
+    const mode = (sessionStorage.getItem('lumix_mode') || localStorage.getItem('lumix_mode') || 'paid').toLowerCase();
+
+    // Strict Mode Enforcement: If we are in demo mode, subscription must be 'demo' or 'pro' (mapped from dashboard types)
+    // If we are in paid mode, subscription MUST NOT be 'demo'
+    if (mode === 'demo' && !['demo', 'pro'].includes(subscription)) {
+        authService.logAudit('SECURITY_VIOLATION', { detail: 'Inconsistent demo session detected' });
+        authService.logout();
+        return <Navigate to="/login" replace />;
+    }
+
+    if (mode === 'paid' && subscription === 'demo') {
+        authService.logAudit('SECURITY_VIOLATION', { detail: 'Demo bypass attempt detected in paid flow' });
+        authService.logout();
+        return <Navigate to="/login" replace />;
+    }
     
-    if (!isPaid && !isDev) {
-        // If authenticated but not paid, redirect to subscription page
+    const isPaid = ['active', 'enterprise', 'pro', 'basic'].includes(subscription);
+    const isDev = ['developer', 'owner', 'admin'].includes(role);
+    const isDemo = mode === 'demo';
+    
+    if (!isPaid && !isDev && !isDemo) {
+        // If authenticated but not paid and not demo, redirect to subscription page
+        authService.logAudit('ACCESS_DENIED', { detail: 'Unpaid account access attempt', subscription });
         return <Navigate to="/subscribe" replace />;
     }
     
@@ -93,8 +133,8 @@ const LandingPageWrapper = () => {
         if (user.token) {
             const subscription = (user.subscription || '').toLowerCase().trim();
             const role = (user.role || '').toLowerCase().trim();
-            const isPaid = ['active', 'enterprise', 'pro', 'basic', 'demo'].includes(subscription);
-            const isDev = ['developer', 'owner', 'admin'].includes(role) || role === 'demo';
+            const isPaid = ['active', 'enterprise', 'pro', 'basic'].includes(subscription);
+            const isDev = ['owner', 'admin'].includes(role);
             
             if (isPaid || isDev) {
                 // We could auto-redirect here, but let's keep it to handleSystemLogin for now
@@ -103,7 +143,10 @@ const LandingPageWrapper = () => {
         }
     }, [user.token, user.subscription, user.role, navigate]);
     
-    return <LandingPage onNavigateLogin={() => navigate('/login')} />;
+    return <LandingPage onNavigateLogin={() => {
+        sessionStorage.setItem('allow_login_access', 'true');
+        navigate('/login');
+    }} />;
 };
 
 // Wrapper for LoginView
@@ -119,6 +162,7 @@ const App: React.FC = () => {
         <Route path="/" element={<LandingPageWrapper />} />
         <Route path="/login" element={<LoginViewWrapper />} />
         <Route path="/dev" element={<DevLogin />} />
+        <Route path="/about" element={<AboutPage />} />
         <Route path="/demo" element={<DemoHandler />} />
         <Route path="/demo/:role" element={<DemoHandler />} />
         

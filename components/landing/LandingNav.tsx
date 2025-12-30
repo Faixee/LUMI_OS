@@ -1,3 +1,9 @@
+/**
+ * LUMIX OS - Advanced Intelligence-First SMS
+ * Created by: Faizain Murtuza
+ * © 2025 Faizain Murtuza. All Rights Reserved.
+ */
+
 import React from 'react';
 import { Hexagon, Lock, Menu, X } from 'lucide-react';
 
@@ -36,9 +42,9 @@ const LandingNav: React.FC<LandingNavProps> = ({
                 </div>
 
                 <div className="hidden md:flex items-center gap-10 text-[10px] font-mono font-bold text-slate-400">
-                    <button onClick={() => onNavigate('/demo')} className="hover:text-cyan-400 transition-colors uppercase tracking-[0.2em] flex items-center gap-2 group">
+                    <button onClick={onScrollToTop} className="hover:text-cyan-400 transition-colors uppercase tracking-[0.2em] flex items-center gap-2 group">
                         <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
-                        Demo
+                        Initialize
                     </button>
                     <button onClick={() => onScrollToSection('intelligence')} className="hover:text-cyan-400 transition-colors uppercase tracking-[0.2em] flex items-center gap-2 group">
                         <span className="w-1.5 h-1.5 bg-slate-600 group-hover:bg-cyan-400 rounded-full transition-colors" />
@@ -92,8 +98,8 @@ const LandingNav: React.FC<LandingNavProps> = ({
                             Wait, I changed /demo to use params. If I go to /demo, role is undefined -> defaults to 'demo' -> backend handles it.
                             So it's safe.
                         */}
-                        <button onClick={() => { onNavigate('/demo'); setIsMobileMenuOpen(false); }} className="text-cyan-400 transition-colors uppercase tracking-[0.2em] flex items-center gap-3">
-                            <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.8)] animate-pulse" /> View Demo
+                        <button onClick={() => { onScrollToTop(); setIsMobileMenuOpen(false); }} className="text-cyan-400 transition-colors uppercase tracking-[0.2em] flex items-center gap-3">
+                            <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.8)] animate-pulse" /> Initialize System
                         </button>
                         <button onClick={() => { onScrollToSection('intelligence'); setIsMobileMenuOpen(false); }} className="hover:text-cyan-400 transition-colors uppercase tracking-[0.2em] flex items-center gap-3">
                             <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full" /> Intelligence

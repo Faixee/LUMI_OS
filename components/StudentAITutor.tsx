@@ -1,35 +1,73 @@
+/**
+ * LUMIX OS - Advanced Intelligence-First SMS
+ * Created by: Faizain Murtuza
+ * © 2025 Faizain Murtuza. All Rights Reserved.
+ */
 
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { generateQuiz, generateExplanation, neuralExplain } from '../services/geminiService';
+import { authService } from '../services/auth';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
-import { Brain, Sparkles, BookOpen, Target, Award, Zap } from 'lucide-react';
+import { Brain, Sparkles, BookOpen, Target, Award, Zap, ChevronRight, Shield, ThumbsUp, ThumbsDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { Student } from '../types';
 
-const StudentAITutor: React.FC = () => {
+interface StudentAITutorProps {
+  students?: Student[];
+}
+
+const StudentAITutor: React.FC<StudentAITutorProps> = ({ students = [] }) => {
   const [activeTab, setActiveTab] = useState<'study' | 'quiz' | 'solve'>('study');
   const [topic, setTopic] = useState('');
-  const [result, setResult] = useState('');
+  const [result, setResult] = useState<string | any[] | null>(null);
+  const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({});
+  const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [question, setQuestion] = useState('');
   const [problem, setProblem] = useState('');
   const [loading, setLoading] = useState(false);
+  const [studentGrade, setStudentGrade] = useState('10');
+  const [lastQuizScore, setLastQuizScore] = useState<number | null>(null);
+  const [subjectMastery, setSubjectMastery] = useState<Record<string, number>>({});
+  const [feedbackGiven, setFeedbackGiven] = useState<Record<string, 'up' | 'down'>>({});
+
+  useEffect(() => {
+    const user = authService.getUser();
+    if (user.role === 'student' && students.length > 0) {
+        const self = students.find(s => s.name === user.name) || students[0];
+        if (self) setStudentGrade(String(self.gradeLevel));
+    }
+    
+    // Load mastery from local storage
+    const savedMastery = localStorage.getItem('lumios_mastery');
+    if (savedMastery) setSubjectMastery(JSON.parse(savedMastery));
+  }, [students]);
+
+  const updateMastery = (subj: string, score: number) => {
+    const newMastery = { ...subjectMastery, [subj]: Math.max(subjectMastery[subj] || 0, score) };
+    setSubjectMastery(newMastery);
+    localStorage.setItem('lumios_mastery', JSON.stringify(newMastery));
+  };
 
   const handleAction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (activeTab === 'solve' && !problem.trim()) return;
     if (activeTab !== 'solve' && !topic && !question) return;
     setLoading(true);
+    setQuizAnswers({});
+    setQuizSubmitted(false);
 
     try {
         if (activeTab === 'quiz') {
-            const quiz = await generateQuiz(topic, 'Intermediate');
+            const quiz = await generateQuiz(topic, 'Intermediate', lastQuizScore || undefined);
             setResult(quiz);
         } else if (activeTab === 'solve') {
-            const explanation = await neuralExplain(topic || 'Mathematics', problem, '10');
+            const explanation = await neuralExplain(topic || 'General Science/Math', problem, studentGrade, true);
             setResult(explanation);
         } else {
             if (question.trim()) {
-                const explanation = await neuralExplain(topic || 'General', question, '10');
+                const explanation = await neuralExplain(topic || 'General', question, studentGrade, true);
                 setResult(explanation);
             } else {
                 const explanation = await generateExplanation(topic);
@@ -37,10 +75,116 @@ const StudentAITutor: React.FC = () => {
             }
         }
     } catch {
-        setResult('> AI is currently unavailable. Please try again in a moment.');
+        setResult('> AI is currently unavailable. Neural link offline.');
     } finally {
         setLoading(false);
     }
+  };
+
+  const renderQuiz = () => {
+    if (!Array.isArray(result)) return null;
+    
+    return (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12">
+            {result.map((q, idx) => (
+                <div key={q.id || idx} className="p-6 rounded-2xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-all">
+                    <div className="flex gap-4 items-start mb-6">
+                        <span className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 font-mono text-sm font-bold flex-shrink-0">
+                            {idx + 1}
+                        </span>
+                        <h4 className="text-lg text-white font-medium leading-relaxed">{q.question}</h4>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ml-12">
+                        {q.options.map((opt: string, optIdx: number) => {
+                            const isSelected = quizAnswers[idx] === optIdx;
+                            const isCorrect = q.correct === optIdx;
+                            const showResult = quizSubmitted;
+                            
+                            let borderClass = "border-white/5";
+                            let bgClass = "bg-black/20";
+                            let textClass = "text-slate-300";
+
+                            if (showResult) {
+                                if (isCorrect) {
+                                    borderClass = "border-emerald-500/50";
+                                    bgClass = "bg-emerald-500/10";
+                                    textClass = "text-emerald-400";
+                                } else if (isSelected) {
+                                    borderClass = "border-rose-500/50";
+                                    bgClass = "bg-rose-500/10";
+                                    textClass = "text-rose-400";
+                                }
+                            } else if (isSelected) {
+                                borderClass = "border-cyan-500/50";
+                                bgClass = "bg-cyan-500/10";
+                                textClass = "text-cyan-400";
+                            }
+
+                            return (
+                                <button
+                                    key={optIdx}
+                                    disabled={quizSubmitted}
+                                    onClick={() => setQuizAnswers(prev => ({ ...prev, [idx]: optIdx }))}
+                                    className={`p-4 rounded-xl border ${borderClass} ${bgClass} ${textClass} text-left text-sm transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center gap-3 group`}
+                                >
+                                    <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${isSelected ? 'border-cyan-400 bg-cyan-400/20' : 'border-white/10 group-hover:border-white/30'}`}>
+                                        {isSelected && <div className="w-2 h-2 rounded-full bg-cyan-400" />}
+                                    </div>
+                                    {opt}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {quizSubmitted && q.explanation && (
+                        <div className="mt-6 ml-12 p-4 rounded-xl bg-cyan-500/5 border border-cyan-500/10 animate-in slide-in-from-top-2 duration-300">
+                            <div className="flex items-center gap-2 mb-2 text-cyan-400">
+                                <Sparkles size={14} />
+                                <span className="text-[10px] font-bold font-mono uppercase tracking-widest">Deep Explanation</span>
+                            </div>
+                            <p className="text-sm text-slate-400 leading-relaxed">{q.explanation}</p>
+                        </div>
+                    )}
+                </div>
+            ))}
+            
+            {!quizSubmitted && (
+                <div className="flex justify-center mt-12">
+                    <button 
+                        onClick={() => {
+                            setQuizSubmitted(true);
+                            const score = (Object.entries(quizAnswers).filter(([idx, ans]) => result[Number(idx)].correct === ans).length / result.length) * 100;
+                            setLastQuizScore(score);
+                            updateMastery(topic || 'General', score);
+                        }}
+                        disabled={Object.keys(quizAnswers).length < result.length}
+                        className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-12 py-4 rounded-2xl font-bold font-sci-fi transition-all shadow-lg shadow-emerald-500/20 tracking-[0.2em] text-sm uppercase flex items-center gap-3"
+                    >
+                        <Target size={20} /> Submit Protocol
+                    </button>
+                </div>
+            )}
+
+            {quizSubmitted && (
+                <div className="mt-12 p-8 rounded-3xl border border-cyan-500/30 bg-cyan-500/5 text-center animate-in zoom-in duration-500">
+                    <div className="w-20 h-20 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mx-auto mb-6">
+                        <Award size={40} className="text-cyan-400" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-white mb-2 font-sci-fi tracking-widest">PROTOCOL COMPLETE</h3>
+                    <p className="text-slate-400 mb-8 font-mono text-sm">
+                        You scored {Object.entries(quizAnswers).filter(([idx, ans]) => result[Number(idx)].correct === ans).length} / {result.length} ({lastQuizScore?.toFixed(0)}%)
+                    </p>
+                    <button 
+                        onClick={() => { setQuizSubmitted(false); setQuizAnswers({}); setResult(null); }}
+                        className="text-cyan-400 font-bold font-mono text-xs uppercase tracking-[0.2em] hover:text-cyan-300 transition-colors"
+                    >
+                        Initialize New Session
+                    </button>
+                </div>
+            )}
+        </div>
+    );
   };
 
   return (
@@ -120,13 +264,26 @@ const StudentAITutor: React.FC = () => {
                           </>
                         ) : (
                           <>
-                            <label className="block text-[10px] font-mono text-cyan-500 uppercase tracking-widest mb-2 font-bold">Math/Science Problem</label>
-                            <textarea 
-                                value={problem}
-                                onChange={(e) => setProblem(e.target.value)}
-                                placeholder="Type the problem. Include equations or LaTeX..."
-                                className="w-full bg-[#0B1120] border border-white/5 rounded-xl p-3 sm:p-4 text-sm text-white focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all placeholder-slate-600 font-sans h-24 resize-none"
-                            />
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-[10px] font-mono text-cyan-500 uppercase tracking-widest mb-2 font-bold">Subject Area</label>
+                                    <input 
+                                        value={topic}
+                                        onChange={(e) => setTopic(e.target.value)}
+                                        placeholder="e.g. Physics, Calculus, Chemistry"
+                                        className="w-full bg-[#0B1120] border border-white/5 rounded-xl p-3 sm:p-4 text-sm text-white focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all placeholder-slate-600 font-sans"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-mono text-cyan-500 uppercase tracking-widest mb-2 font-bold">Math/Science Problem</label>
+                                    <textarea 
+                                        value={problem}
+                                        onChange={(e) => setProblem(e.target.value)}
+                                        placeholder="Type the problem. Include equations or LaTeX..."
+                                        className="w-full bg-[#0B1120] border border-white/5 rounded-xl p-3 sm:p-4 text-sm text-white focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all placeholder-slate-600 font-sans h-24 resize-none"
+                                    />
+                                </div>
+                            </div>
                           </>
                         )}
                     </div>
@@ -144,19 +301,55 @@ const StudentAITutor: React.FC = () => {
                     
                     <button 
                         type="submit" 
-                        disabled={loading || !topic}
+                        disabled={loading || (
+                            activeTab === 'solve' ? !problem.trim() : 
+                            activeTab === 'study' ? (!topic.trim() && !question.trim()) :
+                            !topic.trim()
+                        )}
                         className="w-full bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white py-3.5 rounded-xl font-bold font-sci-fi tracking-[0.2em] text-[10px] sm:text-xs shadow-lg shadow-cyan-500/20 transition-all active:scale-95 touch-manipulation flex items-center justify-center gap-3 uppercase"
                     >
                         {loading ? (
                             <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> PROCESSING...</>
                         ) : (
-                            <><Zap size={16} /> {activeTab === 'quiz' ? 'GENERATE EXAM' : 'EXPLAIN IT'}</>
+                            <>
+                                <Zap size={16} /> 
+                                {activeTab === 'quiz' ? 'GENERATE EXAM' : (activeTab === 'solve' ? 'SOLVE PROBLEM' : 'EXPLAIN IT')}
+                            </>
                         )}
                     </button>
                 </form>
             </div>
 
             <div className="flex-1 flex flex-col gap-4">
+                <div className="p-0">
+                    <h4 className="text-[10px] sm:text-xs font-bold text-slate-400 mb-4 font-mono flex items-center gap-2 uppercase tracking-widest">
+                        <Target size={14} className="text-cyan-500" />
+                        Neural Mastery
+                    </h4>
+                    <div className="space-y-3">
+                        {Object.entries(subjectMastery).length > 0 ? (
+                            Object.entries(subjectMastery).map(([subj, score]) => (
+                                <div key={subj} className="p-3 sm:p-4 rounded-xl bg-[#0f172a]/60 border border-cyan-500/20">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="text-xs text-cyan-300">{subj}</span>
+                                        <span className="text-[10px] font-bold text-cyan-400 font-mono">{score.toFixed(0)}%</span>
+                                    </div>
+                                    <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                                        <div 
+                                            className="h-full bg-cyan-500 transition-all duration-1000" 
+                                            style={{ width: `${score}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="p-4 rounded-xl border border-white/5 bg-white/[0.02] text-center">
+                                <p className="text-[10px] text-slate-500 font-mono uppercase tracking-wider">No mastery data yet</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
                 <div className="p-0">
                     <h4 className="text-[10px] sm:text-xs font-bold text-slate-400 mb-4 font-mono flex items-center gap-2 uppercase tracking-widest">
                         <Award size={14} className="text-amber-500" />
@@ -197,20 +390,55 @@ const StudentAITutor: React.FC = () => {
         {/* Output Panel */}
         <div className="w-full lg:flex-1 rounded-3xl border border-white/5 bg-[#050914] flex flex-col overflow-hidden relative shadow-2xl min-h-0 h-[400px] lg:h-auto">
             <div className="p-5 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
-                <h3 className="font-bold text-white text-xs font-mono uppercase tracking-widest">AI Output Stream</h3>
+                <div className="flex items-center gap-4">
+                    <h3 className="font-bold text-white text-xs font-mono uppercase tracking-widest">AI Output Stream</h3>
+                    {result && !Array.isArray(result) && (
+                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20">
+                            <Shield className="text-cyan-400" size={10} />
+                            <span className="text-[9px] font-bold text-cyan-400 font-mono uppercase tracking-tighter">Verified Accurate</span>
+                        </div>
+                    )}
+                </div>
                 {result && activeTab === 'quiz' && (
                     <span className="text-[10px] font-mono text-emerald-400 animate-pulse bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">+50 XP ON COMPLETION</span>
                 )}
             </div>
             <div className="flex-1 overflow-y-auto p-4 sm:p-8 custom-scrollbar relative">
                 {result ? (
-                    <div className="prose prose-invert prose-p:text-slate-300 prose-headings:text-white prose-strong:text-cyan-300 prose-code:text-amber-300 max-w-none animate-in fade-in slide-in-from-bottom-2 duration-500 text-sm sm:text-base">
-                        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{result}</ReactMarkdown>
+                    <div className="space-y-8">
+                        <div className="prose prose-invert prose-p:text-slate-300 prose-headings:text-white prose-strong:text-cyan-300 prose-code:text-amber-300 max-w-none animate-in fade-in slide-in-from-bottom-2 duration-500 text-sm sm:text-base">
+                            {Array.isArray(result) ? renderQuiz() : (
+                                <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{result}</ReactMarkdown>
+                            )}
+                        </div>
+
+                        {result && !Array.isArray(result) && (
+                            <div className="pt-8 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-4">
+                                <div className="text-[10px] font-mono text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                    <Sparkles size={12} className="text-amber-500" />
+                                    Did this help your understanding?
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button 
+                                        onClick={() => setFeedbackGiven(prev => ({ ...prev, [String(result).slice(0, 20)]: 'up' }))}
+                                        className={`p-2 rounded-lg border transition-all ${feedbackGiven[String(result).slice(0, 20)] === 'up' ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'}`}
+                                    >
+                                        <ThumbsUp size={16} />
+                                    </button>
+                                    <button 
+                                        onClick={() => setFeedbackGiven(prev => ({ ...prev, [String(result).slice(0, 20)]: 'down' }))}
+                                        className={`p-2 rounded-lg border transition-all ${feedbackGiven[String(result).slice(0, 20)] === 'down' ? 'bg-rose-500/20 border-rose-500/50 text-rose-400' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'}`}
+                                    >
+                                        <ThumbsDown size={16} />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                         
-                        {activeTab === 'quiz' && (
-                            <button className="mt-8 bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-3 rounded-xl font-bold font-sci-fi transition-colors shadow-lg tracking-wider text-sm">
-                                SUBMIT ANSWERS
-                            </button>
+                        {feedbackGiven[String(result).slice(0, 20)] && (
+                            <div className="p-3 rounded-xl bg-cyan-500/5 border border-cyan-500/20 text-center animate-in fade-in zoom-in duration-300">
+                                <p className="text-[9px] font-mono text-cyan-400 uppercase tracking-widest">Feedback recorded. Neural link optimizing...</p>
+                            </div>
                         )}
                     </div>
                 ) : (

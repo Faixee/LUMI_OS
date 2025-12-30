@@ -1,3 +1,9 @@
+/**
+ * LUMIX OS - Advanced Intelligence-First SMS
+ * Created by: Faizain Murtuza
+ * © 2025 Faizain Murtuza. All Rights Reserved.
+ */
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Shield, Key, Mail, ArrowRight, Terminal, Unlock, Sparkles } from 'lucide-react';
@@ -29,7 +35,7 @@ const DevLogin: React.FC = () => {
                         return '/api';
                     }
                 }
-                return 'http://127.0.0.1:8000';
+                return 'http://localhost:54322';
             };
             const API_URL = getApiUrl();
             

@@ -1,3 +1,8 @@
+/**
+ * LUMIX OS - GLOBAL LANDING INTERFACE
+ * Created by: Faizain Murtuza
+ * © 2025 Faizain Murtuza. All Rights Reserved.
+ */
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Cpu, Shield, Globe, ArrowRight, CheckCircle2, Scan, Lock, Unlock, Users, Server, Database, Activity, Code, Folder, FileCode, Layers, Box, Aperture, Terminal, Zap, Power, MousePointer2, XCircle, Layout, Gamepad2, Sparkles, Eye } from 'lucide-react';
@@ -130,58 +135,41 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateLogin }) => {
     }
   };
 
+  const handleDemo = () => {
+    // SECURITY: Explicitly set initialization flag in session storage
+    // This prevents direct URL access to /demo/* without clicking this button
+    sessionStorage.setItem('lumix_demo_init_active', 'true');
+    setIsDemoSelectorOpen(true);
+    authService.logAudit('DEMO_INITIALIZE_CLICKED');
+  };
+
   const handleSystemLogin = () => {
+    // Check if user is already authenticated and has a valid subscription
     const user = authService.getUser();
-    const token = user.token;
     
-    // Check if token is valid (not 'null', 'undefined', or empty)
-    const isValidToken = token && token !== 'null' && token !== 'undefined' && token.length > 0;
+    // Check if user has a valid paid subscription or developer/admin role
+    // Valid paid tiers: 'active', 'enterprise', 'pro', 'basic'
+    // Valid roles: 'developer', 'owner', 'admin'
+    const subStatus = (user.subscription || 'free').toLowerCase();
+    const role = (user.role || '').toLowerCase();
+    const isPaid = ['active', 'enterprise', 'pro', 'basic'].includes(subStatus);
+    const isDev = ['developer', 'owner', 'admin'].includes(role);
+    const isAuth = !!(user.token && user.token !== 'null' && user.token !== 'undefined');
 
-    // Set a flag to allow login page access only via System Login
-    sessionStorage.setItem('allow_login_access', 'true');
-
-    // Filter out developer roles from system login
-    const role = (user.role || '').toLowerCase().trim();
-    if (role === 'developer') {
-        navigate('/dev');
-        return;
-    }
-
-    if (isValidToken) {
-      const subscription = (user.subscription || '').toLowerCase().trim();
-      
-      const isPaid = ['active', 'enterprise', 'pro', 'basic', 'demo'].includes(subscription);
-      const isDev = ['owner', 'admin'].includes(role) || role === 'demo';
-      
-      if (isPaid || isDev) {
-        setLoginState('granted');
-        setTimeout(() => {
-            setLoginState('welcome');
-        }, 1500);
-        setTimeout(() => {
-            navigate('/app');
-        }, 4000);
-      } else {
-        setLoginState('denied');
-        setTimeout(() => {
-            if (loginState === 'denied') { // Check if still denied
-                setLoginState('idle');
-                navigate('/subscribe');
-            }
-        }, 3000);
-      }
+    // If user is authenticated AND (isPaid OR isDev), allow access
+    if (isAuth && (isPaid || isDev)) {
+        // Set a flag to allow login page access only via System Login
+        sessionStorage.setItem('allow_login_access', 'true');
+        navigate('/login');
     } else {
-      // If not logged in, also show access denied and redirect to pricing
-      // as per user request: "system login... instantly triggers to pricing page"
-      setLoginState('denied');
-      setTimeout(() => {
-          setLoginState('idle');
-          navigate('/subscribe');
-      }, 3000);
+        // Otherwise (Visitor or Free User), show Access Denied overlay
+        setShowLoginDenied(true);
+        authService.logAudit('UNAUTHORIZED_LOGIN_ATTEMPT', { role: role || 'visitor' });
     }
   };
 
   const [isSystemTourActive, setIsSystemTourActive] = useState(false);
+  const [showLoginDenied, setShowLoginDenied] = useState(false);
   const systemTourTimeoutsRef = useRef<number[]>([]);
 
   const stopSystemTour = () => {
@@ -506,12 +494,59 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateLogin }) => {
              <div className="absolute inset-0 bg-[linear-gradient(rgba(0,243,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,243,255,0.03)_1px,transparent_1px)] bg-[size:60px_60px] opacity-20 transform perspective-1000 rotateX(10deg)"></div>
         </div>
 
-        <PaywallModal
-          isOpen={isPaywallOpen}
+        <PaywallModal 
+          isOpen={isPaywallOpen} 
           onClose={() => setIsPaywallOpen(false)}
           onViewPlans={() => { setIsPaywallOpen(false); navigate('/subscribe'); }}
           onContinueDemo={() => { setIsPaywallOpen(false); setIsDemoSelectorOpen(true); }}
         />
+
+        {/* Access Denied Modal for Unauthorized Login Attempts */}
+        {showLoginDenied && (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
+                <div className="glass-panel max-w-md w-full p-8 rounded-3xl border border-rose-500/30 shadow-[0_0_100px_rgba(244,63,94,0.15)] relative overflow-hidden animate-lock-shake">
+                    <button 
+                        onClick={() => setShowLoginDenied(false)}
+                        className="absolute top-4 right-4 p-2 text-slate-500 hover:text-white transition-colors"
+                    >
+                        <XCircle size={24} />
+                    </button>
+                    
+                    <div className="text-center space-y-6">
+                        <div className="w-20 h-20 bg-rose-500/10 rounded-2xl mx-auto flex items-center justify-center border border-rose-500/30 shadow-[0_0_30px_rgba(244,63,94,0.2)]">
+                            <Lock size={40} className="text-rose-500" />
+                        </div>
+                        
+                        <div className="space-y-2">
+                            <h2 className="text-2xl font-bold text-white font-sci-fi tracking-widest uppercase">Restricted Access</h2>
+                            <p className="text-rose-400 text-sm font-mono font-bold">
+                                SYSTEM GATEWAY LOCKED
+                            </p>
+                        </div>
+
+                        <p className="text-slate-400 text-sm leading-relaxed">
+                            The system login is strictly reserved for active subscribers and authorized personnel. Please initialize a subscription to gain entry credentials.
+                        </p>
+
+                        <div className="grid grid-cols-1 gap-3 pt-4">
+                            <button 
+                                onClick={() => { setShowLoginDenied(false); navigate('/subscribe'); }}
+                                className="w-full bg-rose-600 hover:bg-rose-500 text-white p-4 rounded-xl font-bold font-sci-fi tracking-widest shadow-[0_0_20px_rgba(244,63,94,0.3)] transition-all flex items-center justify-center gap-2"
+                            >
+                                <Zap size={18} />
+                                GET ACCESS NOW
+                            </button>
+                            <button 
+                                onClick={() => setShowLoginDenied(false)}
+                                className="w-full bg-white/5 hover:bg-white/10 text-white p-4 rounded-xl font-bold font-sci-fi tracking-widest border border-white/10 transition-all"
+                            >
+                                RETURN
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
 
         <DemoSelectorModal
           isOpen={isDemoSelectorOpen}
@@ -536,7 +571,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateLogin }) => {
           sloganIndex={sloganIndex}
           slogans={slogans}
           isSystemTourActive={isSystemTourActive}
-          onDemo={() => setIsDemoSelectorOpen(true)}
+          onDemo={handleDemo}
           onToggleSystemTour={() => {
             if (isSystemTourActive) {
               stopSystemTour();
@@ -1002,6 +1037,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateLogin }) => {
                 </div>
                 <div className="flex gap-8 text-[10px] font-mono text-slate-500 uppercase tracking-widest">
                     <button 
+                        onClick={() => navigate('/about')}
+                        className="hover:text-cyan-400 transition-colors"
+                    >
+                        About Creator
+                    </button>
+                    <button 
                         onClick={() => setFooterModalType('privacy')}
                         className="hover:text-cyan-400 transition-colors"
                     >
@@ -1021,7 +1062,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateLogin }) => {
                     </button>
                 </div>
                 <div className="text-[10px] font-mono text-slate-600">
-                    &copy; 2050 LUMIX INTELLIGENCE SYSTEMS.
+                    SYSTEM CREATED BY FAIZAIN MURTUZA &copy; {new Date().getFullYear()} LUMIX INTELLIGENCE SYSTEMS.
                 </div>
             </div>
         </footer>
@@ -1133,6 +1174,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onNavigateLogin }) => {
                 </div>
             </div>
         )}
+
+        {/* Subtle UI Watermark */}
+        <div className="fixed bottom-6 right-6 z-[50] pointer-events-none select-none opacity-10 hover:opacity-40 transition-opacity duration-700">
+            <div className="flex flex-col items-end">
+                <div className="text-[12px] font-sci-fi tracking-[0.4em] text-white uppercase drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]">LUMIX OS</div>
+                <div className="text-[8px] font-mono text-cyan-400 uppercase tracking-[0.2em]">Designed & Engineered by Faizain Murtuza</div>
+            </div>
+        </div>
     </div>
   );
 };

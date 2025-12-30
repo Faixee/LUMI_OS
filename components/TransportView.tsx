@@ -1,3 +1,9 @@
+/**
+ * LUMIX OS - Advanced Intelligence-First SMS
+ * Created by: Faizain Murtuza
+ * © 2025 Faizain Murtuza. All Rights Reserved.
+ */
+
 import React, { useState, useEffect } from 'react';
 import { Bus, Navigation, Fuel, AlertTriangle, ShieldCheck, Zap, Radio, Phone } from 'lucide-react';
 import { TransportRoute } from '../types';

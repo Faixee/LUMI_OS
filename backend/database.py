@@ -1,3 +1,9 @@
+"""
+LUMIX OS - Advanced Intelligence-First SMS
+Created by: Faizain Murtuza
+© 2025 Faizain Murtuza. All Rights Reserved.
+"""
+
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker

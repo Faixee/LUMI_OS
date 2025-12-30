@@ -1,14 +1,22 @@
 
+/**
+ * LUMIX OS - SECURE AUTHENTICATION GATEWAY
+ * Created by: Faizain Murtuza
+ * © 2025 Faizain Murtuza. All Rights Reserved.
+ */
 import React, { useState, useEffect } from 'react';
-import { Lock, ScanFace, ArrowRight, ShieldCheck, AlertCircle, UserPlus, LogIn, Eye, EyeOff, Info, CheckCircle2, Github, Mail, Unlock, Sparkles, ShieldAlert, Zap } from 'lucide-react';
+import { Lock, ScanFace, ArrowRight, ShieldCheck, AlertCircle, UserPlus, Eye, EyeOff, CheckCircle2, Mail, Unlock, Sparkles, Zap, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/auth';
 import { api } from '../services/api';
+import SubscriptionView from './SubscriptionView';
 
 interface LoginViewProps {
   onLoginSuccess: (role: string, name: string) => void;
   onBack?: () => void;
 }
+
+type LoginStatus = 'idle' | 'authenticating' | 'denied' | 'granted' | 'welcome';
 
 const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack }) => {
   const navigate = useNavigate();
@@ -34,9 +42,9 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
-  const [loginState, setLoginState] = useState<'idle' | 'authenticating' | 'denied' | 'granted' | 'welcome'>('idle');
-  const [authData, setAuthData] = useState<any>(null);
-
+  const [loginState, setLoginState] = useState<LoginStatus>('idle');
+  const [showPricing, setShowPricing] = useState(false);
+  
   // Check for existing session and lock page on mount
   useEffect(() => {
     // Lock the login page unless accessed via System Login
@@ -55,12 +63,15 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack }) => {
         
         if (!isPaid && !isDev) {
             setLoginState('denied');
-            setTimeout(() => {
-                navigate('/subscribe');
-            }, 3000);
         }
     }
   }, [navigate]);
+
+  const handlePricingSuccess = () => {
+    setShowPricing(false);
+    setLoginState('idle');
+    // After payment, the user should be able to log in normally
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,20 +142,22 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack }) => {
   };
 
   const handleAuthSuccess = (data: any) => {
-      setAuthData(data);
       const store = rememberMe ? localStorage : sessionStorage;
       
       const subStatus = (data.subscription_status || data.subscription || 'free').toLowerCase();
       const role = (data.role || '').toLowerCase();
       
       const isDev = role === 'developer' || role === 'owner' || role === 'admin';
-      const isPaid = ['active', 'enterprise', 'pro', 'basic', 'demo'].includes(subStatus) || role === 'demo';
+      const isPaid = ['active', 'enterprise', 'pro', 'basic'].includes(subStatus);
       
       // Store session data
       store.setItem('lumix_token', data.access_token);
       store.setItem('lumix_role', data.role);
       store.setItem('lumix_user', data.name);
-      store.setItem('lumix_subscription', isPaid && subStatus === 'free' ? 'demo' : subStatus);
+      store.setItem('lumix_subscription', subStatus);
+      store.setItem('lumix_mode', 'paid'); // Explicitly set paid mode
+      
+      authService.logAudit('LOGIN_SUCCESS', { username, role, subscription: subStatus });
 
       if (!rememberMe) {
         // Clear persistent storage if not remembering
@@ -166,6 +179,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack }) => {
           }, 4500); // 1.5s granted + 3s welcome
       } else {
           setLoginState('denied');
+          authService.logAudit('ACCESS_DENIED', { username, subStatus });
           setLoading(false);
       }
   };
@@ -182,56 +196,16 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack }) => {
   };
 
   const handleDemoMode = async () => {
-        setLoading(true);
-        setLoginState('authenticating');
-        try {
-            const data = await authService.demoLogin();
-            handleAuthSuccess(data);
-        } catch (err: any) {
-            setError(err.message || "Demo Access Failed");
-            setLoading(false);
-            setLoginState('idle');
-        }
-    };
+    // SECURITY: Block legacy demo login attempt from Login page
+    setError('Demo mode must be initialized from the main landing page.');
+    setLoginState('idle');
+    setLoading(false);
+  };
 
-    if (loginState === 'welcome') {
-        return (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/20 via-black to-cyan-900/20 animate-pulse" />
-                <div className="relative z-10 text-center space-y-8 animate-welcome">
-                    <div className="relative inline-block">
-                        <div className="w-32 h-32 md:w-40 md:h-40 bg-indigo-500/10 rounded-full flex items-center justify-center border border-indigo-500/30 shadow-[0_0_50px_rgba(79,70,229,0.3)]">
-                            <Sparkles size={60} className="text-cyan-400 animate-pulse" />
-                        </div>
-                        <div className="absolute -inset-4 bg-cyan-500/20 rounded-full blur-2xl animate-pulse" />
-                    </div>
-                    
-                    <div className="space-y-4">
-                        <h1 className="text-4xl md:text-6xl font-bold text-white font-sci-fi tracking-[0.2em] text-glow-animate">
-                            WELCOME TO LUMIX
-                        </h1>
-                        <p className="text-cyan-400/60 font-mono text-sm md:text-base tracking-[0.5em] uppercase animate-in slide-in-from-bottom-4 duration-1000 delay-300">
-                            System Core Initialized
-                        </p>
-                    </div>
-
-                    <div className="flex flex-col items-center gap-4 mt-12">
-                        <div className="w-64 h-1 bg-white/5 rounded-full overflow-hidden">
-                            <div className="h-full bg-gradient-to-r from-indigo-500 to-cyan-500 animate-[loading_3s_ease-in-out_forwards]" />
-                        </div>
-                        <span className="text-[10px] font-mono text-slate-500 tracking-widest animate-pulse uppercase">
-                            Loading secure environment...
-                        </span>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    return (
+  return (
         <div className="responsive-container">
             {/* Access Denied Modal */}
-            {loginState === 'denied' && (
+            {loginState === 'denied' && !showPricing && (
                 <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4 animate-in fade-in duration-500">
                     <div className="glass-panel max-w-md w-full p-10 rounded-[2rem] border border-rose-500/30 shadow-[0_0_100px_rgba(244,63,94,0.15)] text-center space-y-8 animate-lock-shake relative overflow-hidden">
                         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-rose-500/50 to-transparent" />
@@ -249,7 +223,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack }) => {
 
                         <div className="flex flex-col gap-4 pt-4">
                             <button 
-                                onClick={() => navigate('/subscribe')}
+                                onClick={() => setShowPricing(true)}
                                 className="w-full bg-rose-600 hover:bg-rose-500 text-white p-5 rounded-2xl font-bold font-sci-fi tracking-[0.2em] transition-all transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(244,63,94,0.3)]"
                             >
                                 <Zap size={20} />
@@ -273,9 +247,24 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack }) => {
                 </div>
             )}
 
+            {/* Pricing/Subscription Modal during Denied flow */}
+            {showPricing && (
+                <div className="fixed inset-0 z-[160] bg-[#030014] overflow-y-auto p-4 md:p-12 animate-in slide-in-from-bottom-10 duration-700">
+                    <div className="max-w-6xl mx-auto relative">
+                        <button 
+                            onClick={() => setShowPricing(false)}
+                            className="fixed top-6 right-6 z-[170] p-4 bg-white/5 hover:bg-white/10 rounded-full border border-white/10 text-white transition-all"
+                        >
+                            <X size={24} />
+                        </button>
+                        <SubscriptionView onSuccess={handlePricingSuccess} />
+                    </div>
+                </div>
+            )}
+
             {/* Access Granted Modal */}
             {loginState === 'granted' && (
-                <div className="fixed inset-0 z-[150] flex items-center justify-center bg-emerald-500/5 backdrop-blur-md animate-in fade-in duration-500">
+                <div className="fixed inset-0 z-[150] flex items-center justify-center bg-[#030014]/95 backdrop-blur-2xl animate-in fade-in duration-500">
                     <div className="glass-panel max-w-md w-full p-10 rounded-[2rem] border border-emerald-500/30 shadow-[0_0_100px_rgba(16,185,129,0.15)] text-center space-y-8 animate-unlock">
                         <div className="w-24 h-24 bg-emerald-500/10 rounded-3xl mx-auto flex items-center justify-center border border-emerald-500/30 shadow-[0_0_30px_rgba(16,185,129,0.2)]">
                             <Unlock size={48} className="text-emerald-400" />
@@ -283,8 +272,8 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack }) => {
                         
                         <div className="space-y-3">
                             <h2 className="text-3xl font-bold text-white font-sci-fi tracking-widest uppercase text-glow">Access Granted</h2>
-                            <p className="text-emerald-400/60 text-xs font-mono tracking-[0.2em] uppercase">
-                                Identity Verified • Subscription Active
+                            <p className="text-emerald-400/60 text-[10px] font-mono tracking-[0.4em] uppercase">
+                                Identity Verified • Session Active
                             </p>
                         </div>
 
@@ -294,7 +283,39 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack }) => {
                                     <div key={i} className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.1}s` }} />
                                 ))}
                             </div>
-                            <span className="text-[10px] font-mono text-emerald-500/40 tracking-[0.4em] uppercase">Initialising Core...</span>
+                            <span className="text-[10px] font-mono text-emerald-500/40 tracking-[0.4em] uppercase animate-pulse">Initializing Neural Link...</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Welcome Animation Sequence */}
+            {loginState === 'welcome' && (
+                <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-[#030014] animate-in fade-in duration-1000">
+                    <div className="relative">
+                        {/* Central Glow */}
+                        <div className="absolute inset-0 bg-indigo-500/20 blur-[120px] rounded-full animate-pulse" />
+                        
+                        <div className="relative text-center space-y-8 animate-in zoom-in-95 duration-1000">
+                            <div className="w-32 h-32 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-[2.5rem] mx-auto flex items-center justify-center border border-white/20 shadow-[0_0_50px_rgba(79,70,229,0.4)] animate-welcome-icon">
+                                <Sparkles size={64} className="text-white animate-pulse" />
+                            </div>
+                            
+                            <div className="space-y-4">
+                                <h1 className="text-5xl md:text-7xl font-bold text-white font-sci-fi tracking-[0.2em] text-glow animate-text-reveal">
+                                    WELCOME TO LUMIX
+                                </h1>
+                                <p className="text-indigo-400 font-mono text-sm md:text-base tracking-[0.5em] uppercase opacity-0 animate-fade-in-up" style={{ animationDelay: '1s' }}>
+                                    System Intelligence Operational
+                                </p>
+                            </div>
+
+                            <div className="pt-12 opacity-0 animate-fade-in" style={{ animationDelay: '2s' }}>
+                                <div className="h-0.5 w-64 bg-white/5 mx-auto rounded-full overflow-hidden relative">
+                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-indigo-500 to-transparent animate-scan" />
+                                </div>
+                                <p className="text-[10px] font-mono text-slate-500 mt-4 tracking-[0.3em] uppercase">Loading personal workspace...</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -368,7 +389,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack }) => {
                 )}
 
                 <div className="space-y-2">
-                    <label htmlFor="username" className="text-xs font-mono text-indigo-300 uppercase tracking-widest ml-1">Identity ID</label>
+                    <label htmlFor="username" className="text-[10px] font-mono text-indigo-300 uppercase tracking-[0.2em] ml-1">IDENTITY ID</label>
                     <input 
                         id="username"
                         name="username"
@@ -376,13 +397,13 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack }) => {
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                         required
-                        className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white font-mono focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all outline-none"
+                        className="w-full bg-[#050b18]/80 border border-white/5 rounded-xl p-4 text-white font-mono focus:border-indigo-500/50 focus:bg-[#070e20] transition-all outline-none text-sm placeholder:text-slate-600"
                         placeholder="Enter Username"
                     />
                 </div>
 
                 <div className="space-y-2">
-                    <label htmlFor="password" className="text-xs font-mono text-indigo-300 uppercase tracking-widest ml-1">Passcode</label>
+                    <label htmlFor="password" className="text-[10px] font-mono text-indigo-300 uppercase tracking-[0.2em] ml-1">PASSCODE</label>
                     <div className="relative">
                       <input 
                           id="password"
@@ -391,26 +412,30 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack }) => {
                           value={password}
                           onChange={(e) => { setPassword(e.target.value); setPasswordStrength(computeStrength(e.target.value)); }}
                           required
-                          className="w-full bg-black/40 border border-white/10 rounded-xl p-3 pr-12 text-white font-mono focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all outline-none"
+                          className="w-full bg-[#050b18]/80 border border-white/5 rounded-xl p-4 pr-12 text-white font-mono focus:border-indigo-500/50 focus:bg-[#070e20] transition-all outline-none text-sm placeholder:text-slate-600"
                           placeholder="••••••••"
                       />
-                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white">
-                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors">
+                        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                       </button>
                     </div>
-                    <div className="mt-2 h-2 w-full bg-white/5 rounded-full overflow-hidden">
-                      <div 
-                        className={`${passwordStrength < 40 ? 'bg-rose-500' : passwordStrength < 70 ? 'bg-amber-500' : 'bg-emerald-500'} h-full transition-all`} 
-                        style={{ width: `${passwordStrength}%` }}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono mt-2">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="accent-cyan-500" />
-                        Remember me
-                      </label>
-                      <button type="button" className="underline decoration-cyan-400/30 hover:text-white" onClick={() => setSuccessMsg('Password reset link sent (demo)')}>Forgot password?</button>
-                    </div>
+                </div>
+
+                <div className="flex items-center justify-between px-1">
+                    <label className="flex items-center gap-2 cursor-pointer group">
+                        <div className="relative flex items-center">
+                            <input 
+                                type="checkbox" 
+                                checked={rememberMe}
+                                onChange={(e) => setRememberMe(e.target.checked)}
+                                className="peer sr-only"
+                            />
+                            <div className="w-4 h-4 border border-indigo-500/30 rounded bg-black/40 peer-checked:bg-indigo-600 peer-checked:border-indigo-500 transition-all" />
+                            <CheckCircle2 size={10} className="absolute left-0.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity" />
+                        </div>
+                        <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest group-hover:text-slate-200 transition-colors">Remember me</span>
+                    </label>
+                    <button type="button" className="text-[10px] font-mono text-indigo-400 hover:text-indigo-300 uppercase tracking-widest transition-colors">Forgot password?</button>
                 </div>
 
                 {isRegister && (
@@ -522,16 +547,18 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onBack }) => {
                 <button 
                     type="submit" 
                     disabled={loading}
-                    className="w-full bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white p-4 rounded-xl font-bold font-sci-fi tracking-widest shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2 relative overflow-hidden group"
+                    className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white p-4 rounded-xl font-bold font-sci-fi tracking-[0.3em] transition-all transform hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(79,70,229,0.4)] disabled:opacity-50 disabled:cursor-not-allowed mt-6 group"
                 >
                     {loading ? (
-                        <>
-                            <ScanFace className="animate-spin" size={20} />
-                            {isRegister ? 'REGISTERING...' : 'AUTHENTICATING...'}
-                        </>
+                        <div className="flex gap-1">
+                            {[1, 2, 3].map(i => (
+                                <div key={i} className="w-1.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: `${i * 0.1}s` }} />
+                            ))}
+                        </div>
                     ) : (
                         <>
-                            {isRegister ? 'CREATE IDENTITY' : 'INITIALIZE SESSION'} <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                            INITIALIZE SESSION
+                            <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                         </>
                     )}
                 </button>

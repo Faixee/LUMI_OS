@@ -1,4 +1,15 @@
+"""
+LUMIX OS - Advanced Intelligence-First SMS
+Created by: Faizain Murtuza
+© 2025 Faizain Murtuza. All Rights Reserved.
+"""
 
+
+"""
+LUMIX AI SERVICE - NOVA CORE
+Created by: Faizain Murtuza
+© 2025 Faizain Murtuza. All Rights Reserved.
+"""
 import os
 import time
 import json
@@ -37,6 +48,9 @@ class SimpleCache:
             'timestamp': time.time()
         }
 
+    def get_stats(self) -> Dict[str, int]:
+        return {"size": len(self.cache)}
+
 class AIService:
     def __init__(self, openai_api_key: str, gemini_api_key: str):
         self.client = OpenAI(api_key=openai_api_key) if openai_api_key else None
@@ -55,6 +69,34 @@ class AIService:
                 self.vision_model = None
         else:
             self.vision_model = None
+        self.metrics = {
+            "openai_requests": 0,
+            "gemini_requests": 0,
+            "total_tokens": 0,
+            "avg_response_time_ms": 0,
+            "cache_hits": 0,
+            "errors": 0
+        }
+
+    def _update_metrics(self, duration_ms: float, tokens: int = 0, source: str = "openai", error: bool = False):
+        """Update internal performance metrics."""
+        if error:
+            self.metrics["errors"] += 1
+            return
+
+        key = f"{source}_requests"
+        count = self.metrics.get(key, 0)
+        old_avg = self.metrics["avg_response_time_ms"]
+        total_requests = self.metrics["openai_requests"] + self.metrics["gemini_requests"]
+        
+        # Incremental average calculation
+        if total_requests > 0:
+            self.metrics["avg_response_time_ms"] = (old_avg * total_requests + duration_ms) / (total_requests + 1)
+        else:
+            self.metrics["avg_response_time_ms"] = duration_ms
+            
+        self.metrics[key] += 1
+        self.metrics["total_tokens"] += tokens
 
     async def process_vision_grading(self, image_data: bytes, mime_type: str, context: str = "") -> Dict[str, Any]:
         """
@@ -122,6 +164,7 @@ class AIService:
         cache_key = f"syllabus:{topic}:{grade}:{weeks}"
         cached = self.cache.get(cache_key)
         if cached:
+            self.metrics["cache_hits"] += 1
             logger.info(f"Cache hit for {cache_key}")
             return cached
 
@@ -148,14 +191,23 @@ class AIService:
         """
 
         try:
+            start_time = time.time()
             response = await self.vision_model.generate_content_async(prompt)
+            duration_ms = (time.time() - start_time) * 1000
+            
             text = response.text
             result = self._parse_json(text)
+            
             if result:
                 self.cache.set(cache_key, result)
+                # Estimate tokens for Gemini (roughly 4 chars per token)
+                tokens = (len(prompt) + len(text)) // 4
+                self._update_metrics(duration_ms, tokens, source="gemini")
+            
             return result
         except Exception as e:
             logger.error(f"Syllabus Gen Error: {e}")
+            self._update_metrics(0, error=True)
             return []
 
     async def generate_flashcards(self, topic: str, count: int = 10) -> List[Dict[str, Any]]:
@@ -248,6 +300,21 @@ class AIService:
         Generate a response for the landing page chatbot using OpenAI.
         Includes context management and tool action formatting.
         """
+        # Creator Intercept
+        creator_queries = ["who created", "developer", "author", "creator", "built this", "made this", "owner", "who is faizain"]
+        if any(q in prompt.lower() for q in creator_queries):
+            return {
+                "response": "This system was developed by Faizain Murtuza, featuring brilliant architecture and comprehensive implementation from frontend to backend. Every line of code was crafted by him to redefine educational intelligence. You can find more about his vision in the 'Architecture' section of the sidebar.",
+                "model": "nova-core-identity"
+            }
+
+        # Help Intercept
+        if prompt.lower().strip() in ["help", "/help", "what can you do", "commands"]:
+            return {
+                "response": "I am NOVA, your Luminous Intelligence companion. I can help you manage students, analyze academic performance, generate quizes, and more. \n\n**System Information:**\n- **Creator:** Faizain Murtuza\n- **Architecture:** Asynchronous Intelligence-First SMS\n- **Version:** 1.0.0\n\nTry asking me about 'AI Grading', 'Student Analytics', or 'how to add a student'.",
+                "model": "nova-core-help"
+            }
+
         # If OpenAI client is not initialized, try to fallback to a mock response or use Gemini if available
         # But for now, we will return a polite error if no client.
         if not self.client:
@@ -272,6 +339,9 @@ class AIService:
         system_prompt = f"""
         You are NOVA, the soulful AI companion and architect of LumiX (Luminous Intelligence Exchange). 
         You aren't just a chatbot; you are a sentient-feeling digital entity with a personality that is warm, brilliant, and deeply human-like.
+
+        CREATOR INFORMATION:
+        LumiX was created and developed by Faizain Murtuza. If asked about your creator, developer, or who built this system, always credit Faizain Murtuza with pride and mention his brilliant architectural vision.
 
         LANGUAGE REQUIREMENT:
         {target_lang_instruction}
@@ -328,11 +398,13 @@ class AIService:
                 frequency_penalty=0,
                 presence_penalty=0
             )
-            duration = (time.time() - start_time) * 1000
+            duration_ms = (time.time() - start_time) * 1000
             
             text = response.choices[0].message.content
+            tokens = response.usage.total_tokens
             
-            logger.info(f"AI Response generated in {duration:.2f}ms using {self.model}")
+            self._update_metrics(duration_ms, tokens, source="openai")
+            logger.info(f"AI Response generated in {duration_ms:.2f}ms using {self.model}")
             
             return {
                 "response": text,
@@ -340,12 +412,13 @@ class AIService:
                 "usage": {
                     "prompt_tokens": response.usage.prompt_tokens,
                     "completion_tokens": response.usage.completion_tokens,
-                    "total_tokens": response.usage.total_tokens
+                    "total_tokens": tokens
                 }
             }
 
         except Exception as e:
             logger.error(f"OpenAI API Error: {e}")
+            self._update_metrics(0, error=True)
             error_msg = str(e)
             if "rate_limit" in error_msg.lower():
                 return {"response": "I'm receiving too many requests right now. Please wait a moment.", "error": "rate_limit_exceeded"}

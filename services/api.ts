@@ -1,3 +1,9 @@
+/**
+ * LUMIX OS - Advanced Intelligence-First SMS
+ * Created by: Faizain Murtuza
+ * © 2025 Faizain Murtuza. All Rights Reserved.
+ */
+
 
 import { Student, FeeRecord, TransportRoute, LibraryBook, ClassSession, Assignment, SchoolConfig } from '../types';
 import { authService } from './auth';
@@ -21,7 +27,7 @@ const getApiUrl = () => {
   const envUrl = (import.meta as any).env?.VITE_API_URL;
   if (envUrl) return envUrl;
   
-  return 'http://localhost:8000';
+  return 'http://localhost:54322';
 };
 
 const API_URL = getApiUrl();

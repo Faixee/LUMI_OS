@@ -1,7 +1,21 @@
+"""
+LUMIX OS - Advanced Intelligence-First SMS
+Created by: Faizain Murtuza
+© 2025 Faizain Murtuza. All Rights Reserved.
+"""
+
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Boolean, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from .database import Base
 from datetime import datetime
+
+class SystemSettings(Base):
+    __tablename__ = "system_settings"
+    key = Column(String, primary_key=True, index=True)
+    value = Column(Text)
+    description = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by = Column(String, nullable=True) # Developer email
 
 class User(Base):
     __tablename__ = "users"
@@ -194,3 +208,24 @@ class LibraryBook(Base):
     author = Column(String)
     category = Column(String)
     status = Column(String, default="Available") # Available, Checked Out
+
+class LearningProgress(Base):
+    __tablename__ = "learning_progress"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    subject = Column(String, index=True)
+    mastery_level = Column(Float, default=0.0)
+    last_score = Column(Float, nullable=True)
+    total_quizzes = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("user_id", "subject", name="uq_learning_user_subject"),)
+
+class AIFeedback(Base):
+    __tablename__ = "ai_feedback"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    request_id = Column(String, index=True) # Correlates with AIRequestLog.request_id
+    feedback_type = Column(String) # 'up', 'down'
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

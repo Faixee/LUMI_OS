@@ -1,3 +1,9 @@
+/**
+ * LUMIX OS - Advanced Intelligence-First SMS
+ * Created by: Faizain Murtuza
+ * © 2025 Faizain Murtuza. All Rights Reserved.
+ */
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Book, Layers, HelpCircle, Loader2, Sparkles, Plus, Play, RotateCw, CheckCircle2, XCircle, Search } from 'lucide-react';
 import { generateSyllabus, generateFlashcards, generateStructuredQuiz } from '../services/geminiService';

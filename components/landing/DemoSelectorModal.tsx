@@ -1,5 +1,12 @@
+/**
+ * LUMIX OS - Advanced Intelligence-First SMS
+ * Created by: Faizain Murtuza
+ * © 2025 Faizain Murtuza. All Rights Reserved.
+ */
+
 import React, { useState, useEffect } from 'react';
 import { X, GraduationCap, Users, User, ShieldCheck, Zap, Terminal, ArrowLeft, CheckCircle2, Sparkles, AlertCircle } from 'lucide-react';
+import { authService } from '../../services/auth';
 
 type DashboardType = 'development' | 'paid';
 
@@ -76,6 +83,19 @@ const DemoSelectorModal: React.FC<DemoSelectorModalProps> = ({ isOpen, onClose, 
     const handleFinalSelection = (type: DashboardType) => {
         try {
             if (!selectedRole) throw new Error("No role selected");
+
+            // Security: Prevent unauthorized access to production/paid environment via demo selector
+            if (type === 'paid') {
+                authService.logAudit('SECURITY_ALERT', { 
+                    action: 'UNAUTHORIZED_PRODUCTION_ACCESS_ATTEMPT', 
+                    role: selectedRole.id, 
+                    source: 'DemoSelector' 
+                });
+                setError("Production environment access denied. Please use System Login with valid credentials.");
+                setTimeout(() => setError(null), 4000);
+                return;
+            }
+
             onSelectRole(selectedRole.id, type);
         } catch (err) {
             setError("Failed to initialize session. Please try again.");

@@ -1,3 +1,9 @@
+"""
+LUMIX OS - Advanced Intelligence-First SMS
+Created by: Faizain Murtuza
+© 2025 Faizain Murtuza. All Rights Reserved.
+"""
+
 from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded

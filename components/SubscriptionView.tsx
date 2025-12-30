@@ -1,24 +1,73 @@
+/**
+ * LUMIX OS - Advanced Intelligence-First SMS
+ * Created by: Faizain Murtuza
+ * © 2025 Faizain Murtuza. All Rights Reserved.
+ */
+
 import React, { useState } from 'react';
 import { Check, Shield, Zap, Globe, Crown, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { authService } from '../services/auth';
 
-const SubscriptionView: React.FC = () => {
+interface SubscriptionViewProps {
+  onSuccess?: () => void;
+}
+
+const SubscriptionView: React.FC<SubscriptionViewProps> = ({ onSuccess }) => {
   const navigate = useNavigate();
   const [processing, setProcessing] = useState<string | null>(null);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const handleSubscribe = async (planName: string) => {
       setProcessing(planName);
       try {
-          const data = await api.billingCheckout(planName);
-          if (!data?.checkout_url) throw new Error('No checkout URL');
-          window.location.assign(data.checkout_url);
+          // Simulate server-side validation delay
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          // Call simulation helper
+          const success = authService.simulatePaymentSuccess(planName);
+          
+          if (success) {
+              if (onSuccess) {
+                  setShowSuccess(true);
+                  setTimeout(() => {
+                      onSuccess();
+                  }, 1500);
+              } else {
+                  // Fallback for standalone view
+                  navigate('/app');
+              }
+          } else {
+              // If not logged in, try real API which will redirect to Stripe or error
+              const data = await api.billingCheckout(planName);
+              if (!data?.checkout_url) throw new Error('No checkout URL');
+              window.location.assign(data.checkout_url);
+          }
       } catch (e: any) {
           alert(e?.message || "Subscription failed. Please try again.");
           setProcessing(null);
       }
   };
+
+  if (showSuccess) {
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black animate-in fade-in duration-500">
+            <div className="glass-panel max-w-md w-full p-10 rounded-[2rem] border border-emerald-500/30 shadow-[0_0_100px_rgba(16,185,129,0.15)] text-center space-y-8 animate-unlock">
+                <div className="w-24 h-24 bg-emerald-500/10 rounded-3xl mx-auto flex items-center justify-center border border-emerald-500/30 shadow-[0_0_30px_rgba(16,185,129,0.2)]">
+                    <Zap size={48} className="text-emerald-400" />
+                </div>
+                
+                <div className="space-y-3">
+                    <h2 className="text-3xl font-bold text-white font-sci-fi tracking-widest uppercase text-glow">Access Granted</h2>
+                    <p className="text-emerald-400/60 text-xs font-mono tracking-[0.2em] uppercase">
+                        Subscription Verified • Initializing...
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+  }
 
   const plans = [
     {

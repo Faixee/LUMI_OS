@@ -1,3 +1,15 @@
+"""
+LUMIX OS - Advanced Intelligence-First SMS
+Created by: Faizain Murtuza
+© 2025 Faizain Murtuza. All Rights Reserved.
+"""
+
+"""
+LUMIX CORE API
+Created by: Faizain Murtuza
+© 2025 Faizain Murtuza. All Rights Reserved.
+System: LumiX OS v1.0.0
+"""
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Request, Response, Header
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +19,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 import asyncio
 import os
 import csv
@@ -55,7 +68,24 @@ app = FastAPI(title="LumiX Core API")
 
 @app.get("/")
 async def root():
-    return {"status": "LumiX Core Online", "version": "1.0.0", "system": "LumiX Core"}
+    return {
+        "status": "LumiX Core Online", 
+        "version": "1.0.0", 
+        "system": "LumiX Core",
+        "creator": "Faizain Murtuza",
+        "debug": "RELOAD_TEST_V2"
+    }
+
+@app.get("/system-info")
+async def system_info():
+    return {
+        "creator": "Faizain Murtuza",
+        "copyright": f"© {datetime.now().year} Faizain Murtuza",
+        "system": "LumiX Core",
+        "version": "1.0.0",
+        "architecture": "Asynchronous Intelligence-First SMS",
+        "development_status": "Production Ready"
+    }
 
 @app.get("/health")
 async def health(db: Session = Depends(database.get_db)):
@@ -73,6 +103,64 @@ async def health(db: Session = Depends(database.get_db)):
         "database": db_status,
         "environment": settings.ENVIRONMENT,
         "mode": "production" if settings.ENVIRONMENT == "production" else "development"
+    }
+
+# --- DEVELOPER & ADMIN ENDPOINTS ---
+dev_guard = auth.DeveloperGuard()
+
+@app.get("/internal/system/settings")
+async def get_system_settings(
+    db: Session = Depends(database.get_db),
+    developer: Any = Depends(dev_guard)
+):
+    """Developer only: Get all global system settings."""
+    settings = db.query(models.SystemSettings).all()
+    return {s.key: s.value for s in settings}
+
+@app.post("/internal/system/settings")
+async def update_system_setting(
+    req: Dict[str, Any],
+    db: Session = Depends(database.get_db),
+    developer: Any = Depends(dev_guard)
+):
+    """Developer only: Update a global system setting."""
+    key = req.get("key")
+    value = str(req.get("value"))
+    desc = req.get("description")
+    
+    if not key:
+        raise HTTPException(status_code=400, detail="Key is required")
+        
+    setting = db.query(models.SystemSettings).filter(models.SystemSettings.key == key).first()
+    if not setting:
+        setting = models.SystemSettings(key=key)
+        db.add(setting)
+    
+    setting.value = value
+    if desc:
+        setting.description = desc
+    setting.updated_by = getattr(developer, "profile", SimpleNamespace(email="unknown")).email
+    
+    db.commit()
+    logger.info(f"System setting '{key}' updated by developer {setting.updated_by}")
+    return {"status": "ok", "key": key, "value": value}
+
+@app.get("/internal/system/stats")
+async def get_system_stats(
+    db: Session = Depends(database.get_db),
+    developer: Any = Depends(dev_guard)
+):
+    """Developer only: Get global system statistics."""
+    user_count = db.query(models.User).count()
+    school_count = db.query(models.SchoolConfig).count()
+    ai_request_count = db.query(models.AIRequestLog).count()
+    
+    return {
+        "total_users": user_count,
+        "total_schools": school_count,
+        "total_ai_requests": ai_request_count,
+        "environment": settings.ENVIRONMENT,
+        "developer_session": getattr(developer, "username", "anonymous")
     }
 
 # ----------------------------
@@ -133,7 +221,11 @@ async def audit_middleware(request: Request, call_next):
         response = await call_next(request)
         duration_ms = int((time.time() - started) * 1000)
         
-        # Structured logging
+        # Add creator attribution to all API responses
+        response.headers["X-Created-By"] = "Faizain Murtuza"
+        response.headers["X-System-Architecture"] = "Asynchronous Intelligence-First SMS"
+        
+        # Structured logging with creator attribution
         logger.info(
             "Request processed",
             extra={
@@ -142,11 +234,14 @@ async def audit_middleware(request: Request, call_next):
                 "path": request.url.path,
                 "status_code": response.status_code,
                 "duration_ms": duration_ms,
-                "ip": get_remote_address(request)
+                "ip": get_remote_address(request),
+                "creator": "Faizain Murtuza"
             }
         )
         return response
     except Exception as e:
+        import traceback
+        traceback.print_exc() # Print full traceback to console
         duration_ms = int((time.time() - started) * 1000)
         logger.error(
             "Request failed",
@@ -671,7 +766,7 @@ def register(user: schemas.UserCreate, request: Request, response: Response, db:
         data={
             "sub": new_user.username,
             "role": new_user.role,
-            "name": new_user.full_name,
+            "name": new_user.full_name or new_user.username,
             "subscription_status": new_user.subscription_status,
             "plan": getattr(new_user, "plan", None),
             "school_id": getattr(new_user, "school_id", None),
@@ -698,7 +793,7 @@ def register(user: schemas.UserCreate, request: Request, response: Response, db:
         "access_token": access_token,
         "token_type": "bearer",
         "role": new_user.role,
-        "name": new_user.full_name,
+        "name": new_user.full_name or new_user.username,
         "subscription_status": new_user.subscription_status,
         "plan": getattr(new_user, "plan", None),
         "school_id": getattr(new_user, "school_id", None),
@@ -732,7 +827,7 @@ def login(creds: schemas.UserLogin, request: Request, response: Response, db: Se
             data={
                 "sub": user.username,
                 "role": user.role,
-                "name": user.full_name,
+                "name": user.full_name or user.username,
                 "subscription_status": user.subscription_status,
                 "plan": getattr(user, "plan", None),
                 "school_id": getattr(user, "school_id", None),
@@ -760,7 +855,7 @@ def login(creds: schemas.UserLogin, request: Request, response: Response, db: Se
             "access_token": access_token,
             "token_type": "bearer",
             "role": "demo",
-            "name": user.full_name,
+            "name": user.full_name or user.username,
             "subscription_status": "demo",
             "plan": "free",
             "school_id": getattr(user, "school_id", None),
@@ -770,7 +865,7 @@ def login(creds: schemas.UserLogin, request: Request, response: Response, db: Se
         "access_token": access_token,
         "token_type": "bearer",
         "role": user.role,
-        "name": user.full_name,
+        "name": user.full_name or user.username,
         "subscription_status": user.subscription_status,
         "plan": getattr(user, "plan", None),
         "school_id": getattr(user, "school_id", None),
@@ -819,7 +914,7 @@ def refresh_auth(req: schemas.RefreshRequest, request: Request, response: Respon
         data={
             "sub": user.username,
             "role": user.role,
-            "name": user.full_name,
+            "name": user.full_name or user.username,
             "subscription_status": user.subscription_status,
             "plan": getattr(user, "plan", None),
             "school_id": getattr(user, "school_id", None),
@@ -846,7 +941,7 @@ def refresh_auth(req: schemas.RefreshRequest, request: Request, response: Respon
         "access_token": access_token,
         "token_type": "bearer",
         "role": user.role,
-        "name": user.full_name,
+        "name": user.full_name or user.username,
         "subscription_status": user.subscription_status,
         "plan": getattr(user, "plan", None),
         "school_id": getattr(user, "school_id", None),
@@ -1601,7 +1696,13 @@ async def test_db_connection(req: schemas.DbTestRequest, current_user: models.Us
         # Use a short timeout for the test
         # Note: In production, you'd want to validate the connection string format
         # and potentially restrict which protocols are allowed.
-        engine = create_engine(req.connection_string, connect_args={"connect_timeout": 5})
+        connect_args = {}
+        if req.connection_string.startswith("postgresql"):
+            connect_args["connect_timeout"] = 5
+        elif req.connection_string.startswith("sqlite"):
+            connect_args["timeout"] = 5
+            
+        engine = create_engine(req.connection_string, connect_args=connect_args)
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         return {"status": "success", "message": "Neural link to database established."}
@@ -1993,7 +2094,7 @@ async def ai_quiz_proxy(req: schemas.QuizRequest, request: Request,
         if cfg and not bool(getattr(cfg, "ai_enabled", True)):
             raise HTTPException(status_code=403, detail=(getattr(cfg, "ai_disabled_reason", None) or "AI disabled"))
 
-        prompt = f"Generate a 5-question quiz about {safe_topic} with difficulty level {req.difficulty}. Return in JSON format."
+        prompt = f"Generate a 5-question multiple choice quiz about {safe_topic} with difficulty level {req.difficulty}. Return ONLY a JSON array of objects with fields: id (int), question (str), options (list of 4 strings), correct (int index 0-3)."
 
         try:
             # Use gemini-3-flash-preview parameters

@@ -1,13 +1,22 @@
 {
   "name": "lumix---ai-school-os",
+  "author": "Faizain Murtuza",
+  "creator": "Faizain Murtuza",
+  "systemMetadata": {
+    "creator": "Faizain Murtuza",
+    "architecture": "Asynchronous Intelligence-First SMS",
+    "copyright": "© 2025 Faizain Murtuza"
+  },
+  "description": "LumiX OS - An Advanced Intelligence-First School Management System",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
     "dev:frontend": "vite",
-    "dev:backend": ".\\.venv\\Scripts\\python.exe -m uvicorn backend.main:app --reload --host localhost --port 8000",
-    "build": "vite build",
+    "dev:backend": ".\\.venv\\Scripts\\python.exe -m uvicorn backend.main:app --reload --host 0.0.0.0 --port 54322",
+    "inject-metadata": "node -e \"const fs=require('fs'); const pkg=require('./package.json'); const meta={creator:pkg.creator, version:pkg.version, copyright:pkg.systemMetadata.copyright, timestamp:new Date().toISOString()}; fs.writeFileSync('./src/metadata.json', JSON.stringify(meta, null, 2)); console.log('Metadata injected.');\"",
+    "build": "npm run inject-metadata && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
