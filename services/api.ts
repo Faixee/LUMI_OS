@@ -10,24 +10,24 @@ import { authService } from './auth';
 
 // In production, this comes from the build environment. In dev, it falls back to localhost.
 const getApiUrl = () => {
-  // Check hostname first to avoid PNA blocks when on a public domain
+  // 1. Prioritize explicit environment variable (e.g., EC2 Backend IP)
+  const envUrl = (import.meta as any).env?.VITE_API_URL;
+  if (envUrl) return envUrl;
+
+  // 2. Fallback to same-origin /api if on a public domain (Legacy Vercel behavior)
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
-    // 2. If we're on a public domain (like Vercel), use the current origin + /api
     if (hostname !== 'localhost' && 
         hostname !== '127.0.0.1' &&
         !hostname.startsWith('192.168.') &&
         !hostname.startsWith('10.') &&
         !hostname.startsWith('172.')) {
-      // Use absolute URL to current origin to avoid any Edge-specific relative path issues
       return `${window.location.origin}/api`;
     }
   }
-
-  const envUrl = (import.meta as any).env?.VITE_API_URL;
-  if (envUrl) return envUrl;
   
-  return 'http://localhost:54322';
+  // 3. Default to local development backend
+  return 'http://localhost:8000';
 };
 
 const API_URL = getApiUrl();

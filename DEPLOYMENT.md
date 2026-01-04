@@ -12,31 +12,31 @@ The application is split into two parts:
 
 ---
 
-## 1️⃣ Backend Deployment (Render.com recommended)
+## 1️⃣ Backend Deployment (AWS EC2 - Recommended for Performance)
 
 **Prerequisites:**
--   GitHub repository containing your code.
+- AWS Account and CLI configured locally.
+- A GitHub repository containing your code.
 
 **Steps:**
-1.  **Create a PostgreSQL Database:**
-    -   Go to [Render Dashboard](https://dashboard.render.com/) -> New -> PostgreSQL.
-    -   Name: `lumix-db`.
-    -   Copy the `Internal DB URL` (for internal use) and `External DB URL` (for local connection).
+1.  **Provision EC2 Instance:**
+    - Run the provided setup script: `bash scripts/setup-ec2.sh <region> <instance-type> <key-name>`
+    - This will create a security group and launch an Ubuntu instance.
+    - Note the **Public IP** returned by the script.
 
-2.  **Deploy Web Service:**
-    -   Go to New -> Web Service.
-    -   Connect your GitHub repo.
-    -   **Runtime:** Python 3.
-    -   **Build Command:** `pip install -r requirements.txt`
-    -   **Start Command:** `uvicorn backend.main:app --host 0.0.0.0 --port 10000`
-    -   **Environment Variables:**
-        -   `DATABASE_URL`: (Paste your Internal DB URL from step 1)
-        -   `SECRET_KEY`: (Generate a long random string)
-        -   `API_KEY`: (Your Gemini AI API Key)
-        -   `ENVIRONMENT`: `production`
-        -   `CORS_ORIGINS`: `https://your-frontend-url.vercel.app` (You will update this after frontend deployment)
+2.  **Initialize the Server:**
+    - SSH into your instance: `ssh -i <your-key>.pem ubuntu@<EC2_PUBLIC_IP>`
+    - Run the initialization script: `curl -s https://raw.githubusercontent.com/Faixee/LUMI_OS/main/scripts/init-ec2.sh | bash`
+    - This installs Docker and Docker Compose.
+
+3.  **Deploy the Backend:**
+    - Copy `.env.example` to `.env` on the server and fill in your secrets.
+    - Run the deployment script: `bash scripts/deploy.sh`
+    - Your backend will be available at `http://<EC2_PUBLIC_IP>:8000`.
 
 ---
+
+## 2️⃣ Backend Deployment (Render.com - Alternative)
 
 ## 2️⃣ Frontend Deployment (Vercel recommended)
 
@@ -49,7 +49,8 @@ The application is split into two parts:
     -   Build Command: `npm run build`
     -   Output Directory: `dist`
 5.  **Environment Variables:**
-    -   `VITE_API_URL`: (The URL of your deployed Backend, e.g., `https://lumix-backend.onrender.com`)
+    -   `VITE_API_URL`: **Mandatory**. The URL of your EC2 backend (e.g., `http://54.x.x.x:8000`).
+    -   Note: If using HTTPS for the frontend, ensure your EC2 backend also has an SSL certificate or use a proxy.
 6.  **Deploy**.
 
 ---
