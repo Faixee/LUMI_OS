@@ -61,7 +61,18 @@ except Exception:
 from jose import jwt, JWTError
 
 
-app = FastAPI(title="LumiX Core API")
+app = FastAPI() 
+
+# Read CORS origins from env 
+origins = os.getenv("CORS_ORIGINS", "").split(",") 
+
+app.add_middleware( 
+    CORSMiddleware, 
+    allow_origins=origins, 
+    allow_credentials=True, 
+    allow_methods=["*"], 
+    allow_headers=["*"], 
+) 
 
 # Initialize Rate Limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -174,42 +185,6 @@ async def get_system_stats(
         "environment": settings.ENVIRONMENT,
         "developer_session": getattr(current_user, "username", "anonymous")
     }
-
-# ----------------------------
-# CORS CONFIGURATION
-# ----------------------------
-# Allow requests from:
-# 1. Local development (localhost, 127.0.0.1)
-# 2. Production Vercel domain (lumios-lms.vercel.app)
-# 3. Any other Vercel preview deployments (*.vercel.app)
-origins = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:3001",
-    "https://lumios-lms.vercel.app",
-    "https://lumios.vercel.app",
-    "https://lumix-os.vercel.app",
-    "http://0.0.0.0:3000",
-    "http://0.0.0.0:3001"
-]
-
-# In development, we can allow more lenient CORS to support local network testing
-if settings.ENVIRONMENT != "production":
-    origins.extend([
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "*"  # Allow all origins in dev for easier mobile testing
-    ])
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 
 # ----------------------------
 # SECURITY MIDDLEWARE
