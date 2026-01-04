@@ -5,3 +5,11 @@ dist
 .trae
 .log
 .figma
+backend/
+api/
+uploads/
+*.sqlite
+*.py
+requirements.txt
+Dockerfile*
+docker-compose.yml
