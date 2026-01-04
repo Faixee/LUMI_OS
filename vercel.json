@@ -12,6 +12,10 @@
   ],
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "http://18.188.78.162:8000/:path*"
+    },
+    {
       "source": "/((?!assets/|favicon.ico|index.tsx|.*\\..*).*)",
       "destination": "/index.html"
     }

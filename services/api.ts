@@ -12,9 +12,17 @@ import { authService } from './auth';
 const getApiUrl = () => {
   // 1. Prioritize explicit environment variable (e.g., EC2 Backend IP)
   const envUrl = (import.meta as any).env?.VITE_API_URL;
+  
+  // If we are in production (Vercel) and the URL is HTTP, it will be blocked.
+  // We recommend using /api relative path to trigger the Vercel Proxy Rewrite.
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:' && envUrl?.startsWith('http:')) {
+    console.warn('[LUMIX] Mixed Content detected. Proxying through /api to avoid browser blocks.');
+    return '/api';
+  }
+
   if (envUrl) return envUrl;
 
-  // 2. Fallback to same-origin /api if on a public domain (Legacy Vercel behavior)
+  // 2. Fallback to same-origin /api if on a public domain
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
     if (hostname !== 'localhost' && 

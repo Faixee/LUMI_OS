@@ -49,13 +49,21 @@ The application is split into two parts:
     -   Build Command: `npm run build`
     -   Output Directory: `dist`
 5.  **Environment Variables:**
-    -   `VITE_API_URL`: **Mandatory**. The URL of your EC2 backend (e.g., `http://54.x.x.x:8000`).
-    -   Note: If using HTTPS for the frontend, ensure your EC2 backend also has an SSL certificate or use a proxy.
+    -   `VITE_API_URL`: Set this to `/api` (This uses the built-in Vercel proxy to avoid "Mixed Content" HTTPS errors).
+    -   **Important**: Update your `vercel.json` with your EC2 IP to enable the proxy.
 6.  **Deploy**.
 
 ---
 
-## 3️⃣ Final Configuration
+## 3️⃣ Troubleshooting: Mixed Content (HTTPS/HTTP)
+
+If you see a "Mixed Content" or "Failed to Fetch" error in production:
+1.  **Vercel Proxy (Recommended)**: 
+    - In `vercel.json`, ensure the `rewrites` section points to your EC2 IP.
+    - Set `VITE_API_URL=/api` in Vercel Dashboard.
+2.  **SSL for Backend**:
+    - Use Let's Encrypt and Nginx on your EC2 instance to serve the backend over `https://`.
+    - Set `VITE_API_URL=https://your-backend-domain.com`.
 
 1.  **Update CORS:**
     -   Go back to your Backend settings.
