@@ -10,25 +10,25 @@ Created by: Faizain Murtuza
 © 2025 Faizain Murtuza. All Rights Reserved.
 System: LumiX OS v1.0.0
 """
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Request, Response, Header
+from fastapi import FastAPI, Depends, HTTPException, Request, Response, Header, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, func
 from sqlalchemy.exc import IntegrityError
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-import asyncio
 import os
+import time
+import secrets
+import re
+import logging
+import hashlib
+import json
 import csv
 import io
-import time
-import json
-import re
 import httpx
-import logging
 from backend.config import settings
 from pythonjsonlogger.json import JsonFormatter
 
@@ -48,9 +48,7 @@ from backend.crawler_service import CrawlerService
 
 crawler_service = CrawlerService(ai_service)
 
-from backend.security import add_security_headers, validate_request_size, validate_csrf_token, sanitize_input, validate_email, validate_password_strength, validate_username
-import hashlib
-import secrets
+from backend.security import add_security_headers, sanitize_input, validate_email, validate_password_strength, validate_username
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -64,6 +62,11 @@ from jose import jwt, JWTError
 
 
 app = FastAPI(title="LumiX Core API")
+
+# Initialize Rate Limiter
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.get("/")
@@ -111,9 +114,12 @@ dev_guard = auth.DeveloperGuard()
 @app.get("/internal/system/settings")
 async def get_system_settings(
     db: Session = Depends(database.get_db),
-    developer: Any = Depends(dev_guard)
+    current_user: models.User = Depends(auth.get_current_active_user)
 ):
-    """Developer only: Get all global system settings."""
+    """Admin/Developer: Get all global system settings."""
+    if not auth.is_developer_user(current_user) and current_user.role != "admin":
+         raise HTTPException(status_code=403, detail="Admin access required")
+
     settings = db.query(models.SystemSettings).all()
     return {s.key: s.value for s in settings}
 
@@ -121,9 +127,12 @@ async def get_system_settings(
 async def update_system_setting(
     req: Dict[str, Any],
     db: Session = Depends(database.get_db),
-    developer: Any = Depends(dev_guard)
+    current_user: models.User = Depends(auth.get_current_active_user)
 ):
-    """Developer only: Update a global system setting."""
+    """Admin/Developer: Update a global system setting."""
+    if not auth.is_developer_user(current_user) and current_user.role != "admin":
+         raise HTTPException(status_code=403, detail="Admin access required")
+
     key = req.get("key")
     value = str(req.get("value"))
     desc = req.get("description")
@@ -139,18 +148,21 @@ async def update_system_setting(
     setting.value = value
     if desc:
         setting.description = desc
-    setting.updated_by = getattr(developer, "profile", SimpleNamespace(email="unknown")).email
+    setting.updated_by = current_user.username
     
     db.commit()
-    logger.info(f"System setting '{key}' updated by developer {setting.updated_by}")
+    logger.info(f"System setting '{key}' updated by {setting.updated_by}")
     return {"status": "ok", "key": key, "value": value}
 
 @app.get("/internal/system/stats")
 async def get_system_stats(
     db: Session = Depends(database.get_db),
-    developer: Any = Depends(dev_guard)
+    current_user: models.User = Depends(auth.get_current_active_user)
 ):
-    """Developer only: Get global system statistics."""
+    """Admin/Developer: Get global system statistics."""
+    if not auth.is_developer_user(current_user) and current_user.role != "admin":
+         raise HTTPException(status_code=403, detail="Admin access required")
+
     user_count = db.query(models.User).count()
     school_count = db.query(models.SchoolConfig).count()
     ai_request_count = db.query(models.AIRequestLog).count()
@@ -160,35 +172,43 @@ async def get_system_stats(
         "total_schools": school_count,
         "total_ai_requests": ai_request_count,
         "environment": settings.ENVIRONMENT,
-        "developer_session": getattr(developer, "username", "anonymous")
+        "developer_session": getattr(current_user, "username", "anonymous")
     }
 
 # ----------------------------
-# WEBRTC SIGNALING
+# CORS CONFIGURATION
 # ----------------------------
-@app.post("/ai/voice-signal")
-async def voice_signal(req: Dict[str, Any], request: Request):
-    """
-    Signaling endpoint for WebRTC voice link.
-    In a full implementation, this would handle ICE candidates and offers/answers.
-    """
-    signal_type = req.get("type")
-    if signal_type == "offer":
-        # Simulate an answer from NOVA
-        return {
-            "type": "answer",
-            "sdp": "v=0\r\no=- 421634512341234123 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=fingerprint:sha-256 ...",
-            "text": "Neural link established. I'm listening."
-        }
-    elif signal_type == "candidate":
-        return {"status": "candidate_received"}
-    
-    return {"status": "ok"}
+# Allow requests from:
+# 1. Local development (localhost, 127.0.0.1)
+# 2. Production Vercel domain (lumios-lms.vercel.app)
+# 3. Any other Vercel preview deployments (*.vercel.app)
+origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+    "https://lumios-lms.vercel.app",
+    "https://lumios.vercel.app",
+    "https://lumix-os.vercel.app",
+    "http://0.0.0.0:3000",
+    "http://0.0.0.0:3001"
+]
 
-# FIX: allow OPTIONS requests (CORS preflight) WITHOUT RATE LIMIT
-limiter = Limiter(key_func=get_remote_address, storage_uri=getattr(settings, "RATE_LIMIT_STORAGE_URI", "memory://"))
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# In development, we can allow more lenient CORS to support local network testing
+if settings.ENVIRONMENT != "production":
+    origins.extend([
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "*"  # Allow all origins in dev for easier mobile testing
+    ])
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ----------------------------
@@ -479,7 +499,7 @@ try:
                 role="admin",
                 school_id="default",
                 subscription_status="active",
-                subscription_expiry=datetime.utcnow() + timedelta(days=3650), # 10 years
+                subscription_expiry=datetime.now(timezone.utc) + timedelta(days=3650), # 10 years
                 plan="enterprise"
             )
             db.add(new_admin)
@@ -550,49 +570,6 @@ def get_parent_transport(db: Session = Depends(database.get_db), current_user: m
     # In a real app, we'd filter by the child's assigned route
     routes = db.query(models.TransportRoute).filter(models.TransportRoute.status == "Active").all()
     return [{"route_name": r.route_name, "driver_name": r.driver_name, "status": r.status} for r in routes]
-if settings.GEMINI_API_KEY and genai:
-    try:
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        # Use gemini-3-flash-preview which is supported by this API key
-        model = genai.GenerativeModel('gemini-3-flash-preview')
-        try:
-            vision_model = genai.GenerativeModel('gemini-3-flash-preview')
-        except Exception:
-            vision_model = None
-        print(f"AI System: Gemini 3 Flash Preview initialized successfully.")
-    except Exception as e:
-        print(f"AI System: Failed to initialize Gemini: {e}")
-        model = None
-        vision_model = None
-else:
-    if not settings.GEMINI_API_KEY:
-        print("AI System: GEMINI_API_KEY missing from environment.")
-    if not genai:
-        print("AI System: google-generativeai package not found.")
-    model = None
-    vision_model = None
-
-# ----------------------------
-# OPENAI
-# ----------------------------
-try:
-    from openai import OpenAI
-except ImportError:
-    OpenAI = None
-
-openai_client = None
-if settings.OPENAI_API_KEY and OpenAI:
-    try:
-        openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
-        logger.info("AI System: OpenAI Client initialized successfully.")
-    except Exception as e:
-        logger.error(f"AI System: Failed to initialize OpenAI: {e}")
-        openai_client = None
-elif not settings.OPENAI_API_KEY:
-    logger.warning("AI System: OPENAI_API_KEY missing from environment.")
-elif not OpenAI:
-    logger.warning("AI System: openai package not found.")
-
 # ----------------------------
 # UTILS
 # ----------------------------
@@ -776,7 +753,7 @@ def register(user: schemas.UserCreate, request: Request, response: Response, db:
 
     refresh_token = auth.create_refresh_token_jwt(new_user)
     new_user.refresh_token_hash = auth._hash_refresh_token(refresh_token)
-    new_user.refresh_token_expires_at = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    new_user.refresh_token_expires_at = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     db.commit()
 
     response.set_cookie(
@@ -837,7 +814,7 @@ def login(creds: schemas.UserLogin, request: Request, response: Response, db: Se
 
     refresh_token = auth.create_refresh_token_jwt(user)
     user.refresh_token_hash = auth._hash_refresh_token(refresh_token)
-    user.refresh_token_expires_at = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    user.refresh_token_expires_at = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     db.commit()
 
     response.set_cookie(
@@ -907,7 +884,7 @@ def refresh_auth(req: schemas.RefreshRequest, request: Request, response: Respon
         raise HTTPException(status_code=401, detail="Not authenticated")
     if not user.refresh_token_hash or user.refresh_token_hash != auth._hash_refresh_token(raw_refresh):
         raise HTTPException(status_code=401, detail="Not authenticated")
-    if user.refresh_token_expires_at and user.refresh_token_expires_at < datetime.utcnow():
+    if user.refresh_token_expires_at and user.refresh_token_expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     access_token = auth.create_access_token(
@@ -924,7 +901,7 @@ def refresh_auth(req: schemas.RefreshRequest, request: Request, response: Respon
 
     new_refresh = auth.create_refresh_token_jwt(user)
     user.refresh_token_hash = auth._hash_refresh_token(new_refresh)
-    user.refresh_token_expires_at = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    user.refresh_token_expires_at = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     db.commit()
 
     response.set_cookie(
@@ -1075,17 +1052,17 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     plan = auth.normalize_plan(metadata.get("plan") or metadata.get("tier") or "")
 
     if not username:
-        payment_event.processed_at = datetime.utcnow()
+        payment_event.processed_at = datetime.now(timezone.utc)
         db.commit()
         return {"status": "ok"}
 
     user = db.query(models.User).filter(models.User.username == username).first()
     if not user:
-        payment_event.processed_at = datetime.utcnow()
+        payment_event.processed_at = datetime.now(timezone.utc)
         db.commit()
         return {"status": "ok"}
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     if evt_type in ("checkout.session.completed", "invoice.paid", "customer.subscription.updated"):
         user.subscription_status = "active"
         user.plan = plan
@@ -1094,7 +1071,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         user.subscription_status = "expired"
         user.subscription_expiry = now
 
-    payment_event.processed_at = datetime.utcnow()
+    payment_event.processed_at = datetime.now(timezone.utc)
     db.commit()
     return {"status": "ok"}
 
@@ -1105,13 +1082,15 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
 
 allow_students_read = auth.FeatureAccess("students_read", allowed_roles=["admin", "teacher"])
 allow_students_write = auth.FeatureAccess("students_read", allowed_roles=["admin"])
-allow_students_self = auth.FeatureAccess("students_read", allowed_roles=["student"])
+# allow_students_self is more permissive to allow students to see their own profile
+allow_students_self = auth.FeatureAccess("students_self", allowed_roles=["student"])
 allow_fees_read = auth.FeatureAccess("fees_read", allowed_roles=["admin", "parent"])
 allow_transport_read = auth.FeatureAccess("transport_read")
 allow_library_read = auth.FeatureAccess("library_read")
 allow_nexus_upload = auth.FeatureAccess("nexus_upload", allowed_roles=["admin"])
 allow_ai_chat = auth.FeatureAccess("ai_chat")
 allow_ai_quiz = auth.FeatureAccess("ai_quiz")
+allow_ai_tutor = auth.FeatureAccess("ai_tutor")
 allow_ai_grade = auth.FeatureAccess("ai_grade", allowed_roles=["admin", "teacher"])
 allow_ai_predict = auth.FeatureAccess("ai_predict", allowed_roles=["admin", "teacher"])
 allow_ai_report = auth.FeatureAccess("ai_report", allowed_roles=["parent", "admin"])
@@ -1159,8 +1138,7 @@ def create_student(student: schemas.StudentCreate,
 @app.post("/students/self", response_model=schemas.StudentResponse)
 def create_self_student(student: schemas.StudentCreate,
                         db: Session = Depends(get_db),
-                        current_user: models.User = Depends(allow_students_self),
-                        write_guard: models.User = Depends(auth.DemoWriteGuard())):
+                        current_user: models.User = Depends(allow_students_self)):
 
     clean_name = sanitize_input(student.name)
     if not clean_name or clean_name.lower() != (current_user.full_name or "").lower():
@@ -1195,17 +1173,57 @@ def create_self_student(student: schemas.StudentCreate,
 @app.get("/students/self", response_model=schemas.StudentResponse)
 def read_self_student(db: Session = Depends(get_db),
                       current_user: models.User = Depends(allow_students_self)):
-    clean_name = sanitize_input(current_user.full_name or "")
-    if not clean_name:
-        raise HTTPException(status_code=404, detail="Student not found")
+    # The full_name in current_user is already sanitized during registration
+    # We should not sanitize it again to avoid double-encoding issues (like & -> &amp; -> &amp;amp;)
+    raw_name = current_user.full_name or ""
+    if not raw_name:
+        raise HTTPException(status_code=404, detail="Student name not set in user profile")
+
     school_id = normalize_school_id(getattr(current_user, "school_id", None))
+    
+    # Try exact match first
     student = (
         db.query(models.Student)
-        .filter(models.Student.school_id == school_id, models.Student.name == clean_name)
+        .filter(models.Student.school_id == school_id, models.Student.name == raw_name)
         .first()
     )
+    
+    # Fallback: Try case-insensitive match if not found
     if not student:
-        raise HTTPException(status_code=404, detail="Student not found")
+        student = (
+            db.query(models.Student)
+            .filter(models.Student.school_id == school_id)
+            .filter(func.lower(models.Student.name) == raw_name.lower())
+            .first()
+        )
+        
+    if not student:
+        # Self-Healing: If user is a student but record is missing, auto-create a basic one
+        # this prevents the 404 and allows the system to function
+        if current_user.role == "student":
+            new_id = f"S{int(time.time())}"
+            # Try to get grade from profile if it exists
+            grade = 10
+            if current_user.profile and current_user.profile.grade_level:
+                grade = current_user.profile.grade_level
+            
+            student = models.Student(
+                id=new_id,
+                school_id=school_id,
+                name=raw_name,
+                grade_level=grade,
+                gpa=0.0,
+                attendance=100.0,
+                behavior_score=100,
+                notes="Auto-generated profile",
+                risk_level="Low"
+            )
+            db.add(student)
+            db.commit()
+            db.refresh(student)
+        else:
+            raise HTTPException(status_code=404, detail="Student record not found for this user")
+            
     return student
 
 
@@ -1302,7 +1320,7 @@ def set_ai_kill_switch(req: schemas.AIKillSwitchRequest,
         reason = (sanitize_input(req.reason or "") or "").strip()
         cfg.ai_disabled_reason = (reason or "AI disabled")[:500]
 
-    cfg.updated_at = datetime.utcnow()
+    cfg.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     return {
@@ -1558,7 +1576,7 @@ async def update_school_config(req: schemas.SchoolConfigUpdate,
     if req.security_level is not None: config.security_level = req.security_level
     if req.ai_creativity is not None: config.ai_creativity = req.ai_creativity
     
-    config.updated_at = datetime.utcnow()
+    config.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(config)
     return config
@@ -1589,9 +1607,6 @@ async def analyze_url(req: schemas.URLAnalysisRequest, request: Request,
     db.add(log_row)
     
     try:
-        if not model:
-            raise HTTPException(status_code=503, detail="AI not configured")
-
         # REAL CRAWLER: Fetch the website content
         site_content = ""
         try:
@@ -1617,72 +1632,68 @@ async def analyze_url(req: schemas.URLAnalysisRequest, request: Request,
             # We continue even if crawl fails, Gemini might still have info in its training data
 
         site_snippet = f"RAW HTML SNIPPET FROM SITE:\n{site_content}\n" if site_content else "Note: Live crawling was blocked. Use your internal knowledge base if available."
-        prompt = f"""
-        Act as a professional Brand Architect and Web Analyst.
-        Target URL: {req.url}
         
-        {site_snippet}
+        try:
+            brand_data = await ai_service.analyze_url(req.url, site_snippet)
+        except Exception as e:
+            logger.error(f"AI Analyze URL Error: {e}")
+            raise HTTPException(status_code=502, detail="AI provider error")
         
-        Analyze the school identity and extract/synthesize the following:
-        1. Official School Name (Clean, formal version)
-        2. School Motto or Tagline (If found in HTML, use it. Otherwise, synthesize a professional one)
-        3. PRIMARY BRAND COLOR (The dominant color. MUST be a valid HEX code)
-        4. SECONDARY BRAND COLOR (The accent color. MUST be a valid HEX code)
-        5. LOGO URL (Look for the main logo in the header, favicon, or og:image. If it's a relative path, resolve it to a full URL. If not found, use a professional placeholder)
-        6. Brief Brand Context (3-4 sentences about their mission and values based on the content)
-        
-        Return ONLY a JSON object in this exact format:
-        {{
-            "name": "string",
-            "motto": "string",
-            "primaryColor": "string",
-            "secondaryColor": "string",
-            "logoUrl": "string",
-            "websiteContext": "string"
-        }}
-        """
-
-        generation_config = {
-            "temperature": 0.2, # Low temperature for consistent JSON
-            "top_p": 0.95,
-            "max_output_tokens": 1024,
-        }
-
-        response = await model.generate_content_async(prompt, generation_config=generation_config)
-        text = getattr(response, "text", "") or ""
-        
-        # Parse JSON from response
-        brand_data = None
-        json_match = re.search(r'\{[\s\S]*\}', text)
-        if json_match:
-            try:
-                brand_data = json.loads(json_match.group(0))
-            except:
-                pass
-        
-        if not brand_data:
-            raise HTTPException(status_code=502, detail="Failed to parse brand identity from AI response")
+        if "error" in brand_data:
+            raise HTTPException(status_code=502, detail=brand_data["error"])
 
         # Post-process: Ensure logoUrl is absolute
         logo_url = brand_data.get("logoUrl", "")
-        if logo_url and logo_url.startswith("/") and not logo_url.startswith("//"):
+        if logo_url and not logo_url.startswith("http"):
             from urllib.parse import urljoin
             brand_data["logoUrl"] = urljoin(req.url, logo_url)
-        elif logo_url and not logo_url.startswith("http"):
-             # If it's just "images/logo.png", urljoin will still handle it if we are careful
-             from urllib.parse import urljoin
-             brand_data["logoUrl"] = urljoin(req.url, logo_url)
 
         log_row.success = True
         return brand_data
 
     except Exception as e:
         log_row.error_type = type(e).__name__
+        log_row.error_message = str(e)
         print(f"CRAWLER ERROR: {e}")
         raise HTTPException(status_code=502, detail=str(e))
     finally:
         log_row.duration_ms = int((time.time() - started) * 1000)
         db.commit()
+
+
+@app.get("/proxy-image")
+async def proxy_image(url: str):
+    """
+    Proxies an image URL to bypass CORS/CORB/ORB restrictions.
+    """
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+        
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+        async with httpx.AsyncClient(timeout=15.0, headers=headers, verify=False) as client:
+            resp = await client.get(url, follow_redirects=True)
+            
+            if resp.status_code != 200:
+                print(f"Proxy Upstream Error: {resp.status_code} for {url}")
+                raise HTTPException(status_code=404, detail=f"Image not found (Upstream {resp.status_code})")
+                
+            content_type = resp.headers.get("content-type", "application/octet-stream")
+            
+            # Basic security check: ensure it's an image
+            if not content_type.startswith("image/"):
+                # Special case for SVGs that might have text/xml type
+                if "svg" not in content_type and "xml" not in content_type:
+                     raise HTTPException(status_code=400, detail=f"Target is not an image ({content_type})")
+            
+            return Response(content=resp.content, media_type=content_type)
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Proxy Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch image: {str(e)}")
 
 
 @app.post("/db/test-connection")
@@ -1737,54 +1748,14 @@ async def ai_chat_proxy(req: schemas.ChatRequest, request: Request,
     db.flush()
 
     try:
-        if not model:
-            raise HTTPException(status_code=503, detail="AI not configured")
-
-        cfg = db.query(models.SchoolConfig).filter(models.SchoolConfig.school_id == school_id).first()
-        if cfg and not bool(getattr(cfg, "ai_enabled", True)):
-            raise HTTPException(status_code=403, detail=(getattr(cfg, "ai_disabled_reason", None) or "AI disabled"))
-
-        safe_context = sanitize_input(req.context)
-        safe_prompt = sanitize_input(req.prompt)
-
-        full_prompt = f"""
-        {safe_context}
-
-        {safe_prompt}
-        """
-
-        generation_config = {
-            "temperature": 0.7,
-            "top_p": 0.95,
-            "max_output_tokens": 2048,
-        }
-
         try:
-            response = await model.generate_content_async(full_prompt, generation_config=generation_config)
-            text = getattr(response, "text", None) or ""
-            if not text:
-                sync_resp = model.generate_content(full_prompt, generation_config=generation_config)
-                text = getattr(sync_resp, "text", "") or ""
+            text = await ai_service.chat(req.prompt, req.context)
         except Exception as e:
-            print(f"DEBUG AI CHAT ERROR: {e}")
-            error_str = str(e).lower()
-            if any(k in error_str for k in ["429", "quota", "rate limit", "too many requests", "resource_exhausted"]):
-                raise HTTPException(status_code=429, detail="AI quota exceeded. Please try again later. (This is a free tier limit of the Gemini API)")
-            try:
-                sync_resp = model.generate_content(full_prompt, generation_config=generation_config)
-                text = getattr(sync_resp, "text", "") or ""
-            except Exception as e2:
-                print(f"DEBUG AI CHAT SYNC ERROR: {e2}")
-                error_str2 = str(e2).lower()
-                if any(k in error_str2 for k in ["429", "quota", "rate limit", "too many requests", "resource_exhausted"]):
-                    raise HTTPException(status_code=429, detail="AI quota exceeded. Please try again later.")
-                raise HTTPException(status_code=502, detail="AI provider error")
+            logger.error(f"AI Chat Error: {e}")
+            raise HTTPException(status_code=502, detail="AI provider error")
 
         if not (text or "").strip():
-            if settings.GEMINI_API_KEY:
-                text = "I'm processing your request, but my neural link is slightly jittery. Please rephrase or try again."
-            else:
-                text = "NOVA is currently in offline simulation mode."
+            text = "I'm processing your request, but my neural link is slightly jittery. Please rephrase or try again."
         
         log_row.output_hash = _hash_text(text)
         log_row.output_len = len(text)
@@ -1792,10 +1763,12 @@ async def ai_chat_proxy(req: schemas.ChatRequest, request: Request,
         return {"response": text}
     except HTTPException as e:
         log_row.error_type = f"http_{e.status_code}"
+        log_row.error_message = str(e.detail)
         raise
     except Exception as e:
         print(f"DEBUG AI CHAT OUTER ERROR: {e}")
         log_row.error_type = type(e).__name__
+        log_row.error_message = str(e)
         raise HTTPException(status_code=502, detail="AI provider error")
     finally:
         log_row.duration_ms = int((time.time() - started) * 1000)
@@ -1815,9 +1788,13 @@ async def genesis_syllabus(req: schemas.GenesisSyllabusRequest,
                            current_user: models.User = Depends(allow_ai_chat)):
     try:
         data = await ai_service.generate_syllabus(req.topic, req.grade, req.weeks)
+        # Ensure we return the 'weeks' list from the object
+        if isinstance(data, dict) and "weeks" in data:
+            return {"response": json.dumps(data["weeks"])}
         return {"response": json.dumps(data)}
     except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        logger.error(f"Syllabus generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/ai/genesis/flashcards")
 @limiter.limit("5/minute")
@@ -1907,77 +1884,52 @@ async def school_crawler(req: schemas.CrawlerRequest, request: Request,
 @limiter.limit("10/minute")
 async def ai_predict_proxy(student: schemas.StudentCreate, request: Request,
                            db: Session = Depends(get_db),
-                           current_user: models.User = Depends(allow_ai_predict)):
+                           current_user: models.User = Depends(auth.get_current_user)):
 
     school_id = normalize_school_id(getattr(current_user, "school_id", None))
     started = time.time()
-    log_row = None
-    
-    try:
-        log_row = models.AIRequestLog(
-            user_id=getattr(current_user, "id", None),
-            school_id=school_id,
-            role=getattr(current_user, "role", None),
-            plan=_effective_plan(current_user),
-            endpoint=request.url.path,
-            request_type="predict",
-            prompt_redacted=None,
-            input_refs=f"student_id={sanitize_input(getattr(student, 'id', '') or '')}"[:200],
-            success=False,
-        )
-        db.add(log_row)
-        db.flush()
-    except Exception as e:
-        logger.warning(f"Failed to log AI predict request: {e}")
-        db.rollback()
+    log_row = models.AIRequestLog(
+        user_id=getattr(current_user, "id", None),
+        school_id=school_id,
+        role=getattr(current_user, "role", None),
+        plan=auth.effective_plan(current_user),
+        endpoint=request.url.path,
+        request_type="predict",
+        prompt_redacted=None,
+        input_refs=f"student_id={sanitize_input(getattr(student, 'id', '') or '')}"[:200],
+        success=False,
+    )
+    db.add(log_row)
+    db.flush()
 
     try:
-        if not model:
-            raise HTTPException(status_code=503, detail="AI not configured")
-
-        cfg = db.query(models.SchoolConfig).filter(models.SchoolConfig.school_id == school_id).first()
-        if cfg and not bool(getattr(cfg, "ai_enabled", True)):
-            raise HTTPException(status_code=403, detail=(getattr(cfg, "ai_disabled_reason", None) or "AI disabled"))
-
-        prompt = f"""
-        Predict future performance for student:
-        Name: {sanitize_input(student.name)}
-        GPA: {student.gpa}
-        Attendance: {student.attendance}%
-        Behavior Score: {student.behavior_score}
-        """
+        student_data = {
+            "name": sanitize_input(student.name),
+            "gpa": student.gpa,
+            "attendance": student.attendance,
+            "behavior_score": student.behavior_score
+        }
 
         try:
-            # Use gemini-3-flash-preview parameters
-            generation_config = {
-                "temperature": 0.7,
-                "top_p": 0.95,
-                "max_output_tokens": 1024,
-            }
-            response = await model.generate_content_async(
-                prompt,
-                generation_config=generation_config
-            )
-            text = getattr(response, "text", "").replace("```json", "").replace("```", "").strip()
+            text = await ai_service.predict_performance(student_data)
         except Exception as e:
-            print(f"DEBUG AI PREDICT ERROR: {e}")
-            error_str = str(e).lower()
-            if any(k in error_str for k in ["429", "quota", "rate limit", "too many requests", "resource_exhausted"]):
-                raise HTTPException(status_code=429, detail="AI quota exceeded. Please try again later. (This is a free tier limit of the Gemini API)")
+            logger.error(f"AI Predict Error: {e}")
             raise HTTPException(status_code=502, detail="AI provider error")
         
         if not text:
             raise HTTPException(status_code=502, detail="AI returned empty response")
 
-        log_row.output_hash = _hash_text(text)
+        log_row.output_hash = hashlib.sha256(text.encode()).hexdigest()
         log_row.output_len = len(text)
         log_row.success = True
         return {"result": text}
     except HTTPException as e:
         log_row.error_type = f"http_{e.status_code}"
+        log_row.error_message = str(e.detail)
         raise
     except Exception as e:
         log_row.error_type = type(e).__name__
+        log_row.error_message = str(e)
         raise HTTPException(status_code=502, detail="AI provider error")
     finally:
         log_row.duration_ms = int((time.time() - started) * 1000)
@@ -1987,11 +1939,52 @@ async def ai_predict_proxy(student: schemas.StudentCreate, request: Request,
             db.rollback()
 
 
+@app.post("/ai/analyze-reference", response_model=schemas.ReferenceAnalysisResponse)
+@limiter.limit("5/minute")
+async def analyze_reference(
+    file: UploadFile = File(...),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(allow_ai_grade)
+):
+    """
+    AI Vision Reference Analysis Endpoint.
+    Analyzes an answer key or rubric image/document.
+    """
+    school_id = normalize_school_id(getattr(current_user, "school_id", None))
+    started = time.time()
+    
+    # Validation
+    allowed_types = ["image/jpeg", "image/png", "application/pdf", "text/plain"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail=f"File type {file.content_type} not supported.")
+    
+    content = await file.read()
+    
+    try:
+        if file.content_type == "text/plain":
+            text_content = content.decode("utf-8")
+            result = await ai_service.analyze_reference_material(text_content, mime_type="text/plain")
+        else:
+            # For images/PDFs
+            result = await ai_service.analyze_reference_material(content, mime_type=file.content_type)
+            
+        if "error" in result:
+            raise HTTPException(status_code=502, detail=result["error"])
+            
+        return result
+        
+    except Exception as e:
+        logger.error(f"Reference Analysis Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/ai/grade", response_model=schemas.GradingResult)
 @limiter.limit("5/minute")
 async def ai_grade(
     file: UploadFile = File(...),
-    context: str = "",
+    context: str = Form(""),
+    reference_data: Optional[str] = Form(None),
     request: Request = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(allow_ai_grade)
@@ -2013,6 +2006,14 @@ async def ai_grade(
     content = await file.read()
     if len(content) > max_size:
         raise HTTPException(status_code=400, detail="File too large. Max 10MB.")
+
+    # Parse reference data
+    ref_data_dict = None
+    if reference_data:
+        try:
+            ref_data_dict = json.loads(reference_data)
+        except Exception:
+            pass
 
     log_row = models.AIRequestLog(
         user_id=getattr(current_user, "id", None),
@@ -2040,7 +2041,8 @@ async def ai_grade(
         result = await ai_service.process_vision_grading(
             image_data=content,
             mime_type=file.content_type,
-            context=context
+            context=context,
+            reference_data=ref_data_dict
         )
 
         if "error" in result:
@@ -2056,6 +2058,7 @@ async def ai_grade(
     except Exception as e:
         log_row.success = False
         log_row.error_type = str(type(e).__name__)
+        log_row.error_message = str(e)
         log_row.duration_ms = int((time.time() - started) * 1000)
         db.commit()
         if isinstance(e, HTTPException):
@@ -2067,7 +2070,7 @@ async def ai_grade(
 @limiter.limit("10/minute")
 async def ai_quiz_proxy(req: schemas.QuizRequest, request: Request,
                         db: Session = Depends(get_db),
-                        current_user: models.User = Depends(allow_ai_quiz)):
+                        current_user: models.User = Depends(auth.get_current_user)):
 
     school_id = normalize_school_id(getattr(current_user, "school_id", None))
     safe_topic = sanitize_input(req.topic)
@@ -2076,10 +2079,10 @@ async def ai_quiz_proxy(req: schemas.QuizRequest, request: Request,
         user_id=getattr(current_user, "id", None),
         school_id=school_id,
         role=getattr(current_user, "role", None),
-        plan=_effective_plan(current_user),
+        plan=auth.effective_plan(current_user),
         endpoint=request.url.path,
         request_type="quiz",
-        prompt_redacted=_redact_prompt(f"topic={safe_topic}; difficulty={sanitize_input(req.difficulty)}"),
+        prompt_redacted=f"topic={safe_topic}; difficulty={sanitize_input(req.difficulty)}",
         input_refs=None,
         success=False,
     )
@@ -2087,46 +2090,27 @@ async def ai_quiz_proxy(req: schemas.QuizRequest, request: Request,
     db.flush()
 
     try:
-        if not model:
-            raise HTTPException(status_code=503, detail="AI not configured")
-
-        cfg = db.query(models.SchoolConfig).filter(models.SchoolConfig.school_id == school_id).first()
-        if cfg and not bool(getattr(cfg, "ai_enabled", True)):
-            raise HTTPException(status_code=403, detail=(getattr(cfg, "ai_disabled_reason", None) or "AI disabled"))
-
-        prompt = f"Generate a 5-question multiple choice quiz about {safe_topic} with difficulty level {req.difficulty}. Return ONLY a JSON array of objects with fields: id (int), question (str), options (list of 4 strings), correct (int index 0-3)."
-
         try:
-            # Use gemini-3-flash-preview parameters
-            generation_config = {
-                "temperature": 0.7,
-                "top_p": 0.95,
-                "max_output_tokens": 2048,
-            }
-            response = await model.generate_content_async(
-                prompt,
-                generation_config=generation_config
-            )
-            text = getattr(response, "text", "") or ""
+            data = await ai_service.generate_quiz(safe_topic, count=5)
+            text = json.dumps(data)
         except Exception as e:
-            print(f"DEBUG AI QUIZ ERROR: {e}")
-            error_str = str(e).lower()
-            if any(k in error_str for k in ["429", "quota", "rate limit", "too many requests", "resource_exhausted"]):
-                raise HTTPException(status_code=429, detail="AI quota exceeded. Please try again later. (This is a free tier limit of the Gemini API)")
+            logger.error(f"AI Quiz Error: {e}")
             raise HTTPException(status_code=502, detail="AI provider error")
             
         if not text.strip():
             raise HTTPException(status_code=502, detail="AI returned empty response")
 
-        log_row.output_hash = _hash_text(text)
+        log_row.output_hash = hashlib.sha256(text.encode()).hexdigest()
         log_row.output_len = len(text)
         log_row.success = True
         return {"response": text}
     except HTTPException as e:
         log_row.error_type = f"http_{e.status_code}"
+        log_row.error_message = str(e.detail)
         raise
     except Exception as e:
         log_row.error_type = type(e).__name__
+        log_row.error_message = str(e)
         raise HTTPException(status_code=502, detail="AI provider error")
     finally:
         log_row.duration_ms = int((time.time() - started) * 1000)
@@ -2134,6 +2118,69 @@ async def ai_quiz_proxy(req: schemas.QuizRequest, request: Request,
             db.commit()
         except Exception:
             db.rollback()
+
+
+@app.post("/ai/solve-problem")
+@limiter.limit("10/minute")
+async def ai_solve_problem(req: schemas.SolveProblemRequest, request: Request,
+                          db: Session = Depends(get_db),
+                          current_user: models.User = Depends(allow_ai_tutor)):
+    """
+    Neural Tutor: Solves educational problems with step-by-step verification.
+    """
+    school_id = normalize_school_id(getattr(current_user, "school_id", None))
+    started = time.time()
+    
+    log_row = models.AIRequestLog(
+        user_id=getattr(current_user, "id", None),
+        school_id=school_id,
+        role=getattr(current_user, "role", None),
+        plan=_effective_plan(current_user),
+        endpoint=request.url.path,
+        request_type="problem_solver",
+        prompt_redacted=_redact_prompt(f"subject={req.subject}; topic={req.topic}; difficulty={req.difficulty}"),
+        success=False,
+    )
+    db.add(log_row)
+    db.flush()
+
+    try:
+        if not ai_service:
+            raise HTTPException(status_code=503, detail="AI Service not initialized")
+
+        cfg = db.query(models.SchoolConfig).filter(models.SchoolConfig.school_id == school_id).first()
+        if cfg and not bool(getattr(cfg, "ai_enabled", True)):
+            raise HTTPException(status_code=403, detail=(getattr(cfg, "ai_disabled_reason", None) or "AI disabled"))
+
+        result = await ai_service.solve_educational_problem(
+            req.subject, req.topic, req.difficulty, req.grade, req.problem
+        )
+        
+        if "error" in result:
+            log_row.error_type = "AIServiceError"
+            log_row.error_message = result["error"]
+            raise HTTPException(status_code=500, detail=result["error"])
+
+        log_row.success = True
+        log_row.duration_ms = int((time.time() - started) * 1000)
+        db.commit()
+        
+        return result
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Solver Error: {e}")
+        
+        # Log the error details
+        log_row.success = False
+        log_row.error_type = type(e).__name__
+        log_row.error_message = str(e)
+        log_row.duration_ms = int((time.time() - started) * 1000)
+        db.commit()
+
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=f"Neural link failure: {str(e)}")
 
 
 @app.post("/ai/report")
@@ -2174,39 +2221,22 @@ async def ai_report_proxy(req: schemas.ReportRequest, request: Request,
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
 
-        if not model:
-            raise HTTPException(status_code=503, detail="AI not configured")
-
-        prompt = f"""
-        Weekly parent report:
-        Name: {student.name}
-        GPA: {student.gpa}
-        Attendance: {student.attendance}%
-        Behavior: {student.behavior_score}
-        Notes: {sanitize_input(student.notes)}
-        """
+        student_data = {
+            "name": student.name,
+            "gpa": student.gpa,
+            "attendance": student.attendance,
+            "behavior_score": student.behavior_score,
+            "notes": sanitize_input(student.notes)
+        }
 
         try:
-            # Use gemini-3-flash-preview parameters
-            generation_config = {
-                "temperature": 0.7,
-                "top_p": 0.95,
-                "max_output_tokens": 2048,
-            }
-            response = await model.generate_content_async(
-                prompt,
-                generation_config=generation_config
-            )
-            text = getattr(response, "text", "") or ""
+            text = await ai_service.generate_report(student_data)
         except Exception as e:
-            print(f"DEBUG AI REPORT ERROR: {e}")
-            error_str = str(e).lower()
-            if any(k in error_str for k in ["429", "quota", "rate limit", "too many requests", "resource_exhausted"]):
-                raise HTTPException(status_code=429, detail="AI quota exceeded. Please try again later. (This is a free tier limit of the Gemini API)")
+            logger.error(f"AI Report Error: {e}")
             raise HTTPException(status_code=502, detail="AI provider error")
             
-        if not text.strip():
-            raise HTTPException(status_code=502, detail="AI returned empty response")
+        if not text.strip() or "failed" in text.lower():
+            raise HTTPException(status_code=502, detail="AI returned empty or failed response")
 
         log_row.output_hash = _hash_text(text)
         log_row.output_len = len(text)
@@ -2255,7 +2285,7 @@ def upload_assignment(file: UploadFile = File(...),
 
     content_type = file.content_type or "application/octet-stream"
     vision_summary = None
-    if vision_model and content_type.startswith("image/"):
+    if ai_service.gemini_available and content_type.startswith("image/"):
         try:
             # Basic prompt for vision analysis
             vision_summary = "Analysis pending"

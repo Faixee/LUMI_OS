@@ -6,7 +6,8 @@
 
 import React, { useMemo, useState } from 'react';
 import { Assignment } from '../types';
-import { BookOpen, CalendarClock, Search, CheckCircle2, AlertTriangle, Upload, Clock, FolderOpen } from 'lucide-react';
+import { BookOpen, CalendarClock, Search, CheckCircle2, AlertTriangle, Upload, Clock, FolderOpen, ScanLine } from 'lucide-react';
+import AIGrader from './AIGrader';
 
 interface AssignmentsViewProps {
   assignments: Assignment[];
@@ -14,6 +15,7 @@ interface AssignmentsViewProps {
 
 const AssignmentsView: React.FC<AssignmentsViewProps> = ({ assignments }) => {
   const [query, setQuery] = useState('');
+  const [showGrader, setShowGrader] = useState(false);
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
     return assignments.filter(a => a.title.toLowerCase().includes(q));
@@ -58,10 +60,18 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({ assignments }) => {
               <CalendarClock size={18} className="text-indigo-400" />
               <span className="text-[10px] sm:text-xs font-mono text-slate-400 uppercase tracking-widest">Assignment Queue</span>
             </div>
-            <button className="text-[10px] font-mono text-slate-400 hover:text-white flex items-center gap-2 transition-colors active:scale-95 touch-manipulation">
-              <Upload size={14} />
-              BULK IMPORT
-            </button>
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={() => setShowGrader(true)}
+                className="px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-mono text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-300 flex items-center gap-2 transition-all active:scale-95 touch-manipulation">
+                <ScanLine size={14} />
+                AI GRADER
+              </button>
+              <button className="text-[10px] font-mono text-slate-400 hover:text-white flex items-center gap-2 transition-colors active:scale-95 touch-manipulation">
+                <Upload size={14} />
+                BULK IMPORT
+              </button>
+            </div>
           </div>
 
           <div className="divide-y divide-white/5">
@@ -132,6 +142,7 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({ assignments }) => {
               <button key={i} className="w-full text-left p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/10 text-xs text-slate-300 flex items-center justify-between group transition-all active:scale-[0.98] touch-manipulation">
                 <div className="flex items-center gap-3">
                   <item.icon size={16} className="text-indigo-400 group-hover:text-indigo-300 transition-colors" />
+      {showGrader && <AIGrader onClose={() => setShowGrader(false)} />}
                   <span className="font-mono tracking-wider">{item.label}</span>
                 </div>
                 <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">

@@ -6,11 +6,11 @@
 
 
 import React, { useState, useEffect } from 'react';
-import { generateQuiz, generateExplanation, neuralExplain } from '../services/geminiService';
+import { generateQuiz, generateExplanation, neuralExplain, solveProblem } from '../services/geminiService';
 import { authService } from '../services/auth';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
-import { Brain, Sparkles, BookOpen, Target, Award, Zap, ChevronRight, Shield, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Brain, Sparkles, BookOpen, Target, Award, Zap, ChevronRight, Shield, ThumbsUp, ThumbsDown, CheckCircle, ListChecks } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Student } from '../types';
 
@@ -21,13 +21,15 @@ interface StudentAITutorProps {
 const StudentAITutor: React.FC<StudentAITutorProps> = ({ students = [] }) => {
   const [activeTab, setActiveTab] = useState<'study' | 'quiz' | 'solve'>('study');
   const [topic, setTopic] = useState('');
-  const [result, setResult] = useState<string | any[] | null>(null);
+  const [result, setResult] = useState<string | any[] | any | null>(null);
   const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({});
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [question, setQuestion] = useState('');
   const [problem, setProblem] = useState('');
   const [loading, setLoading] = useState(false);
   const [studentGrade, setStudentGrade] = useState('10');
+  const [difficulty, setDifficulty] = useState('Intermediate');
+  const [subject, setSubject] = useState('Mathematics');
   const [lastQuizScore, setLastQuizScore] = useState<number | null>(null);
   const [subjectMastery, setSubjectMastery] = useState<Record<string, number>>({});
   const [feedbackGiven, setFeedbackGiven] = useState<Record<string, 'up' | 'down'>>({});
@@ -60,11 +62,11 @@ const StudentAITutor: React.FC<StudentAITutorProps> = ({ students = [] }) => {
 
     try {
         if (activeTab === 'quiz') {
-            const quiz = await generateQuiz(topic, 'Intermediate', lastQuizScore || undefined);
+            const quiz = await generateQuiz(topic, difficulty, lastQuizScore || undefined);
             setResult(quiz);
         } else if (activeTab === 'solve') {
-            const explanation = await neuralExplain(topic || 'General Science/Math', problem, studentGrade, true);
-            setResult(explanation);
+            const solution = await solveProblem(subject, topic || 'General', difficulty, studentGrade, problem);
+            setResult(solution);
         } else {
             if (question.trim()) {
                 const explanation = await neuralExplain(topic || 'General', question, studentGrade, true);
@@ -75,10 +77,70 @@ const StudentAITutor: React.FC<StudentAITutorProps> = ({ students = [] }) => {
             }
         }
     } catch {
-        setResult('> AI is currently unavailable. Neural link offline.');
+        setResult({ error: 'AI is currently unavailable. Neural link offline.' });
     } finally {
         setLoading(false);
     }
+  };
+
+  const renderSolution = () => {
+    if (!result || typeof result !== 'object' || Array.isArray(result) || result.error) {
+        if (result?.error) return <div className="text-rose-400 font-mono text-sm">{result.error}</div>;
+        return null;
+    }
+
+    const { subject, difficulty, steps, final_answer, verification_status, pedagogical_note } = result;
+
+    return (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12">
+            <div className="flex items-center justify-between p-4 rounded-2xl bg-cyan-500/5 border border-cyan-500/10">
+                <div className="flex items-center gap-3">
+                    <Brain className="text-cyan-400" size={20} />
+                    <div>
+                        <h4 className="text-white font-bold text-sm uppercase tracking-wider">{subject} Solution</h4>
+                        <p className="text-[10px] text-slate-400 font-mono">{difficulty} Tier // Grade {studentGrade}</p>
+                    </div>
+                </div>
+                <div className={`px-3 py-1 rounded-full text-[10px] font-bold font-mono border ${verification_status === 'Verified' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'}`}>
+                    {verification_status}
+                </div>
+            </div>
+
+            <div className="space-y-6">
+                {steps.map((step: any, idx: number) => (
+                    <div key={idx} className="relative pl-8 border-l border-white/5">
+                        <div className="absolute left-0 top-0 -translate-x-1/2 w-4 h-4 rounded-full bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center">
+                            <div className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                        </div>
+                        <h5 className="text-cyan-300 font-bold text-sm mb-2 font-mono uppercase tracking-wide">{step.title}</h5>
+                        <div className="prose prose-invert prose-sm max-w-none text-slate-300">
+                            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{step.content}</ReactMarkdown>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            <div className="p-6 rounded-3xl bg-emerald-500/5 border border-emerald-500/20 shadow-lg shadow-emerald-500/5">
+                <div className="flex items-center gap-2 mb-4 text-emerald-400">
+                    <CheckCircle size={18} />
+                    <span className="text-xs font-bold font-mono uppercase tracking-[0.2em]">Final Resolution</span>
+                </div>
+                <div className="text-xl text-white font-medium leading-relaxed">
+                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{final_answer}</ReactMarkdown>
+                </div>
+            </div>
+
+            {pedagogical_note && (
+                <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 flex gap-4 items-start">
+                    <Sparkles className="text-amber-500 flex-shrink-0" size={18} />
+                    <div>
+                        <span className="text-[10px] font-bold text-amber-500 font-mono uppercase tracking-widest block mb-1">Pedagogical Insight</span>
+                        <p className="text-sm text-slate-400 leading-relaxed italic">"{pedagogical_note}"</p>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
   };
 
   const renderQuiz = () => {
@@ -249,6 +311,35 @@ const StudentAITutor: React.FC<StudentAITutorProps> = ({ students = [] }) => {
                 </div>
 
                 <form onSubmit={handleAction} className="space-y-4 sm:space-y-6">
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-[10px] font-mono text-cyan-500 uppercase tracking-widest mb-2 font-bold">Subject</label>
+                            <select 
+                                value={subject}
+                                onChange={(e) => setSubject(e.target.value)}
+                                className="w-full bg-[#0B1120] border border-white/5 rounded-xl p-2 text-xs text-white focus:border-cyan-500/50 transition-all font-mono"
+                            >
+                                <option value="Mathematics">Mathematics</option>
+                                <option value="Physics">Physics</option>
+                                <option value="Chemistry">Chemistry</option>
+                                <option value="Biology">Biology</option>
+                                <option value="Computer Science">Computer Science</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-mono text-cyan-500 uppercase tracking-widest mb-2 font-bold">Difficulty</label>
+                            <select 
+                                value={difficulty}
+                                onChange={(e) => setDifficulty(e.target.value)}
+                                className="w-full bg-[#0B1120] border border-white/5 rounded-xl p-2 text-xs text-white focus:border-cyan-500/50 transition-all font-mono"
+                            >
+                                <option value="Basic">Basic</option>
+                                <option value="Intermediate">Intermediate</option>
+                                <option value="Advanced">Advanced</option>
+                            </select>
+                        </div>
+                    </div>
+
                     <div>
                         {activeTab !== 'solve' ? (
                           <>
@@ -408,7 +499,9 @@ const StudentAITutor: React.FC<StudentAITutorProps> = ({ students = [] }) => {
                     <div className="space-y-8">
                         <div className="prose prose-invert prose-p:text-slate-300 prose-headings:text-white prose-strong:text-cyan-300 prose-code:text-amber-300 max-w-none animate-in fade-in slide-in-from-bottom-2 duration-500 text-sm sm:text-base">
                             {Array.isArray(result) ? renderQuiz() : (
-                                <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{result}</ReactMarkdown>
+                                typeof result === 'object' && result !== null ? renderSolution() : (
+                                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{result}</ReactMarkdown>
+                                )
                             )}
                         </div>
 

@@ -13,12 +13,11 @@ export default defineConfig(() => {
     server: {
       port: 3000,
       host: '127.0.0.1',
-      strictPort: true,
+      strictPort: false,
       cors: true,
       hmr: {
         host: 'localhost',
         protocol: 'ws',
-        port: 3000,
       },
     },
     optimizeDeps: {

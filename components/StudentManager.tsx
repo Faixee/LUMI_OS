@@ -7,14 +7,14 @@
 
 import React, { useState } from 'react';
 import { Student, AgentName } from '../types';
-import { Search, Trash2, Brain, AlertCircle, ScanLine, UserPlus, Fingerprint, CheckCircle2 } from 'lucide-react';
+import { Search, Trash2, Brain, AlertCircle, ScanLine, UserPlus, Fingerprint, CheckCircle2, X, Loader2 } from 'lucide-react';
 import { checkEthics } from '../services/geminiService';
 
 interface StudentManagerProps {
   students: Student[];
   onAddStudent: (student: Student) => void;
   onDeleteStudent: (id: string) => void;
-  onRunAstra: (student: Student) => void;
+  onRunAstra: (student: Student) => Promise<void>;
   logAgentAction: (agent: AgentName, action: string, status: 'success' | 'warning' | 'error' | 'processing', details?: string) => void;
 }
 
@@ -31,6 +31,26 @@ const StudentManager: React.FC<StudentManagerProps> = ({ students, onAddStudent,
   });
   const [isCheckingEthics, setIsCheckingEthics] = useState(false);
   const [ethicsError, setEthicsError] = useState<string | null>(null);
+  
+  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
+  const [predictionStudentId, setPredictionStudentId] = useState<string | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+
+  const activePrediction = students.find(s => s.id === predictionStudentId);
+
+  const handleRunAnalysis = async (student: Student) => {
+      setAnalyzingId(student.id);
+      setAnalysisError(null);
+      try {
+          await onRunAstra(student);
+          setPredictionStudentId(student.id);
+      } catch (e) {
+          setAnalysisError(`Analysis failed for ${student.name}. Please check system logs.`);
+          setTimeout(() => setAnalysisError(null), 5000); // Auto-clear after 5s
+      } finally {
+          setAnalyzingId(null);
+      }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -166,11 +186,12 @@ const StudentManager: React.FC<StudentManagerProps> = ({ students, onAddStudent,
               </div>
               <div className="flex gap-2">
                 <button 
-                  onClick={() => onRunAstra(student)}
-                  className="p-2 text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-colors active:scale-90 touch-manipulation"
+                  onClick={() => handleRunAnalysis(student)}
+                  disabled={analyzingId === student.id}
+                  className={`p-2 text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-colors active:scale-90 touch-manipulation ${analyzingId === student.id ? 'opacity-50 cursor-wait' : ''}`}
                   title="Run Predictive Analysis"
                 >
-                  <Brain size={18} />
+                  {analyzingId === student.id ? <Loader2 size={18} className="animate-spin" /> : <Brain size={18} />}
                 </button>
                 <button 
                   onClick={() => onDeleteStudent(student.id)}
@@ -197,7 +218,6 @@ const StudentManager: React.FC<StudentManagerProps> = ({ students, onAddStudent,
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-300">
           <div className="glass-panel w-full max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar p-0 rounded-2xl shadow-2xl animate-in zoom-in-95 duration-300 border border-indigo-500/30 relative">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-cyan-500 to-indigo-500"></div>
-            
             <div className="bg-[#0a0a15] p-6 border-b border-white/5 flex justify-between items-center">
                 <h3 className="text-xl font-bold text-white font-sci-fi flex items-center gap-3 tracking-wide">
                     <ScanLine size={24} className="text-cyan-400" />
@@ -254,6 +274,86 @@ const StudentManager: React.FC<StudentManagerProps> = ({ students, onAddStudent,
           </div>
         </div>
       )}
+
+      {analysisError && (
+        <div className="fixed top-20 right-6 z-[110] animate-in slide-in-from-right-10 fade-in duration-300">
+          <div className="bg-rose-950/90 backdrop-blur-md border border-rose-500/50 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-4">
+            <div className="bg-rose-500/20 p-2 rounded-full">
+              <AlertCircle className="text-rose-400" size={24} />
+            </div>
+            <div>
+              <h4 className="font-bold font-sci-fi text-rose-200">ANALYSIS ERROR</h4>
+              <p className="text-sm text-rose-300/80 font-mono">{analysisError}</p>
+            </div>
+            <button 
+              onClick={() => setAnalysisError(null)}
+              className="ml-4 p-1 hover:bg-white/10 rounded-full transition-colors"
+            >
+              <X size={18} className="text-rose-400" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activePrediction && predictionStudentId && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-300">
+          <div className="glass-panel w-full max-w-lg overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 duration-300 border border-purple-500/30 relative">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 via-indigo-500 to-purple-500"></div>
+            
+            <div className="p-6">
+                <div className="flex justify-between items-start mb-6">
+                    <div>
+                        <h3 className="text-xl font-bold text-white font-sci-fi flex items-center gap-2">
+                            <Brain className="text-purple-400" />
+                            ASTRA PREDICTION
+                        </h3>
+                        <p className="text-slate-400 text-xs font-mono mt-1">NEURAL ANALYSIS COMPLETE</p>
+                    </div>
+                    <button 
+                        onClick={() => setPredictionStudentId(null)}
+                        className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                    >
+                        <X size={20} className="text-slate-400" />
+                    </button>
+                </div>
+
+                <div className="bg-black/40 rounded-xl p-4 border border-white/5 mb-6">
+                    <div className="flex items-center gap-4 mb-4">
+                        <div className="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center border border-purple-500/30">
+                            <span className="text-xl font-bold text-purple-400">{activePrediction.name.charAt(0)}</span>
+                        </div>
+                        <div>
+                            <div className="text-white font-bold">{activePrediction.name}</div>
+                            <div className={`text-xs font-mono font-bold px-2 py-0.5 rounded inline-block mt-1 ${
+                                activePrediction.riskLevel === 'Low' ? 'bg-emerald-500/20 text-emerald-400' :
+                                activePrediction.riskLevel === 'Medium' ? 'bg-amber-500/20 text-amber-400' : 'bg-rose-500/20 text-rose-400'
+                            }`}>
+                                {activePrediction.riskLevel?.toUpperCase()} RISK
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div className="prose prose-invert prose-sm max-w-none">
+                        <p className="text-slate-300 leading-relaxed">
+                            {activePrediction.predictedOutcome || "Analysis complete. No detailed output available."}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex justify-end">
+                    <button 
+                        onClick={() => setPredictionStudentId(null)}
+                        className="px-6 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-bold transition-all text-xs tracking-wider"
+                    >
+                        ACKNOWLEDGE
+                    </button>
+                </div>
+            </div>
+          </div>
+        </div>
+      )}
+            
+
     </div>
   );
 };

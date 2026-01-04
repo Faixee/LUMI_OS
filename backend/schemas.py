@@ -91,6 +91,22 @@ class GradingResult(BaseModel):
     feedback: str
     annotations: Optional[List[Dict[str, Any]]] = []
     insights: Optional[Dict[str, Any]] = {}
+    reference_match_score: Optional[float] = None # Percentage match with reference
+    flags: Optional[List[str]] = [] # For flagging significant deviations
+    grading_confidence: Optional[float] = 0.0 # Confidence in the grading
+
+class ReferenceAnalysisResponse(BaseModel):
+    answers: List[Dict[str, Any]] # [{"q": "1", "answer": "A", "marks": 5}]
+    total_marks: int
+    criteria: str
+    summary: str
+    confidence_score: Optional[float] = 0.0
+    benchmarks: Optional[Dict[str, Any]] = {}
+
+class GradingReferenceInput(BaseModel):
+    # For text/structured input
+    content: Optional[str] = None
+    format: str = "text" # text, json, xml
 
 class ChatRequest(BaseModel):
     prompt: str
@@ -138,6 +154,13 @@ class QuizRequest(BaseModel):
 
 class ReportRequest(BaseModel):
     student_id: str
+
+class SolveProblemRequest(BaseModel):
+    subject: str
+    topic: str
+    difficulty: str
+    grade: str
+    problem: str
 
 
 class AIKillSwitchRequest(BaseModel):

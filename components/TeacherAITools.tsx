@@ -7,11 +7,44 @@
 
 import React, { useState } from 'react';
 import { generateLessonPlan } from '../services/geminiService';
-import { Brain, Sparkles, BookOpen, Copy, Check, Scan, Camera, Upload, FileCheck, Save, XCircle, Zap } from 'lucide-react';
+import { 
+  Brain, 
+  Sparkles, 
+  BookOpen, 
+  Copy, 
+  Check, 
+  Scan, 
+  Camera, 
+  Upload, 
+  FileCheck, 
+  Save, 
+  XCircle, 
+  Zap, 
+  Search, 
+  BarChart3, 
+  Clock, 
+  ChevronRight, 
+  Target, 
+  Lightbulb, 
+  CheckCircle2, 
+  AlertTriangle, 
+  X, 
+  Loader2, 
+  FileText 
+} from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { api } from '../services/api';
+
+interface ReferenceData {
+  answers: Array<{q: string, answer: string, marks: number}>;
+  total_marks: number;
+  criteria: string;
+  summary: string;
+  confidence_score?: number;
+  benchmarks?: Record<string, any>;
+}
 
 const TeacherAITools: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'planner' | 'grader'>('planner');
@@ -25,16 +58,13 @@ const TeacherAITools: React.FC = () => {
 
   // Grader State
   const [isScanning, setIsScanning] = useState(false);
-  const [scanResult, setScanResult] = useState<{
-    student: string, 
-    score: number, 
-    feedback: string, 
-    annotations?: {point: string, comment: string}[],
-    insights?: {strengths: string[], weaknesses: string[], recommendation: string}
-  } | null>(null);
+  const [scanResult, setScanResult] = useState<any>(null);
+  const [gradingMode, setGradingMode] = useState<'standard' | 'reference'>('standard');
+  const [refData, setRefData] = useState<ReferenceData | null>(null);
+  const [isAnalyzingRef, setIsAnalyzingRef] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadStatus, setUploadStatus] = useState<'idle'|'uploading'|'success'|'error'>('idle');
   const [uploadMsg, setUploadMsg] = useState('');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,6 +88,24 @@ const TeacherAITools: React.FC = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleRefUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      setIsAnalyzingRef(true);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+          const data = await api.analyzeReference(formData);
+          setRefData(data);
+      } catch (e) {
+          console.error("Reference Analysis Failed", e);
+      } finally {
+          setIsAnalyzingRef(false);
+      }
+  };
+
   const handleGradeAssignment = async () => {
       if (!selectedFile) {
           setUploadStatus('error');
@@ -71,7 +119,14 @@ const TeacherAITools: React.FC = () => {
       setUploadMsg('AI Vision Analysis in progress...');
       
       try {
-          const result = await api.gradeAssignment(selectedFile);
+          const formData = new FormData();
+          formData.append('file', selectedFile);
+          
+          if (gradingMode === 'reference' && refData) {
+              formData.append('reference_data', JSON.stringify(refData));
+          }
+
+          const result = await api.gradeAssignment(formData);
           setScanResult(result);
           setUploadStatus('success');
           setUploadMsg('Analysis complete');
@@ -239,7 +294,7 @@ const TeacherAITools: React.FC = () => {
                 </div>
             </div>
         ) : (
-            <div className="space-y-6 sm:space-y-8">
+            <div className="space-y-6 sm:space-y-8 max-h-[calc(100vh-250px)] overflow-y-auto pr-2 custom-scrollbar">
                 {/* Vision Grader Header */}
                 <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-6 sm:p-8 text-center relative overflow-hidden group">
                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent"></div>
@@ -256,13 +311,61 @@ const TeacherAITools: React.FC = () => {
                             <label className="w-full sm:w-auto px-8 py-4 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-bold font-sci-fi tracking-widest shadow-lg shadow-cyan-500/20 transition-all active:scale-95 cursor-pointer touch-manipulation flex items-center justify-center gap-3 group/btn">
                                 <Camera size={20} className="group-hover/btn:rotate-12 transition-transform" />
                                 SCAN ASSIGNMENT
-                                <input type="file" className="hidden" accept="image/*,.pdf" onChange={handleFileChange} />
+                                <input type="file" className="hidden" accept="image/*" capture="environment" onChange={handleFileChange} />
                             </label>
                             <span className="text-[10px] font-mono text-slate-600 uppercase tracking-widest">or</span>
-                            <button className="w-full sm:w-auto px-8 py-4 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl font-bold font-sci-fi tracking-widest border border-white/10 transition-all active:scale-95 touch-manipulation flex items-center justify-center gap-3">
+                            <label className="w-full sm:w-auto px-8 py-4 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl font-bold font-sci-fi tracking-widest border border-white/10 transition-all active:scale-95 cursor-pointer touch-manipulation flex items-center justify-center gap-3">
                                 <Upload size={20} />
                                 BROWSE FILES
-                            </button>
+                                <input type="file" className="hidden" accept="image/*,.pdf" onChange={handleFileChange} />
+                            </label>
+                        </div>
+
+                        {/* Grading Mode Selection & Reference Key */}
+                        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl mx-auto">
+                            <div className="bg-white/5 p-4 rounded-xl border border-white/10">
+                                <label className="text-[9px] font-mono text-slate-500 uppercase tracking-[0.2em] block mb-3 text-left">Grading Logic</label>
+                                <div className="flex bg-black/40 p-1 rounded-lg border border-white/5">
+                                    <button 
+                                        onClick={() => setGradingMode('standard')}
+                                        className={`flex-1 py-2 text-[9px] font-bold uppercase tracking-widest rounded-md transition-all ${gradingMode === 'standard' ? 'bg-cyan-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}
+                                    >
+                                        Standard
+                                    </button>
+                                    <button 
+                                        onClick={() => setGradingMode('reference')}
+                                        className={`flex-1 py-2 text-[9px] font-bold uppercase tracking-widest rounded-md transition-all ${gradingMode === 'reference' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}
+                                    >
+                                        Reference
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className={`bg-white/5 p-4 rounded-xl border transition-all ${gradingMode === 'reference' ? 'border-emerald-500/30' : 'border-white/10 opacity-50 grayscale pointer-events-none'}`}>
+                                <label className="text-[9px] font-mono text-emerald-500/70 uppercase tracking-[0.2em] block mb-3 text-left flex items-center gap-2">
+                                    <CheckCircle2 size={10} /> Reference Key
+                                </label>
+                                
+                                {!refData ? (
+                                    <label className="flex flex-col items-center justify-center gap-2 border border-dashed border-emerald-500/20 rounded-lg p-2 hover:bg-emerald-500/5 cursor-pointer transition-all">
+                                        <input type="file" className="hidden" accept="image/*,.pdf,.txt" onChange={handleRefUpload} />
+                                        {isAnalyzingRef ? (
+                                            <Loader2 size={14} className="animate-spin text-emerald-400" />
+                                        ) : (
+                                            <Upload size={14} className="text-emerald-500" />
+                                        )}
+                                        <span className="text-[8px] font-mono text-emerald-500/50 uppercase">Upload Key</span>
+                                    </label>
+                                ) : (
+                                    <div className="flex items-center justify-between bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
+                                        <div className="flex items-center gap-2 overflow-hidden">
+                                            <FileText size={12} className="text-emerald-400 shrink-0" />
+                                            <span className="text-[8px] font-mono text-emerald-400 truncate uppercase">{refData.summary.substring(0, 15)}...</span>
+                                        </div>
+                                        <button onClick={() => setRefData(null)} className="text-emerald-400/50 hover:text-emerald-400"><X size={12} /></button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                         
                         {uploadMsg && (
@@ -276,11 +379,11 @@ const TeacherAITools: React.FC = () => {
                         )}
                         
                         {selectedFile && uploadStatus !== 'success' && (
-                            <div className="mt-8 flex justify-center">
+                            <div className="mt-8 flex flex-col items-center gap-4">
                                 <button 
                                     onClick={handleGradeAssignment}
-                                    disabled={isScanning}
-                                    className="px-10 py-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl font-bold font-sci-fi tracking-widest shadow-xl shadow-indigo-500/20 transition-all active:scale-95 touch-manipulation flex items-center gap-3"
+                                    disabled={isScanning || (gradingMode === 'reference' && !refData)}
+                                    className="px-10 py-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:grayscale text-white rounded-xl font-bold font-sci-fi tracking-widest shadow-xl shadow-indigo-500/20 transition-all active:scale-95 touch-manipulation flex items-center gap-3"
                                 >
                                     {isScanning ? (
                                         <><span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> ANALYZING...</>
@@ -288,6 +391,13 @@ const TeacherAITools: React.FC = () => {
                                         <><Brain size={20} /> INITIATE AUTO-GRADE</>
                                     )}
                                 </button>
+
+                                {gradingMode === 'reference' && !refData && (
+                                    <div className="flex items-center gap-2 text-amber-400 text-[9px] font-mono uppercase tracking-widest animate-pulse">
+                                        <AlertTriangle size={12} />
+                                        Reference key required for this mode
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -307,6 +417,21 @@ const TeacherAITools: React.FC = () => {
                                 </div>
                                 <div className="text-xl font-bold text-white font-sci-fi tracking-wider mb-1 uppercase">{scanResult.student}</div>
                                 <div className="text-[10px] font-mono text-cyan-400 uppercase tracking-[0.2em] font-bold">A- Grade Status</div>
+
+                                {scanResult.reference_match_score !== undefined && (
+                                    <div className="mt-6 pt-6 border-t border-white/5">
+                                        <div className="text-[9px] font-mono text-emerald-400 uppercase tracking-widest mb-2">Key Alignment</div>
+                                        <div className="flex items-center justify-center gap-3">
+                                            <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
+                                                <div 
+                                                    className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400" 
+                                                    style={{ width: `${scanResult.reference_match_score}%` }}
+                                                ></div>
+                                            </div>
+                                            <span className="text-xs font-bold text-emerald-400 font-mono">{scanResult.reference_match_score}%</span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                             
                             <div className="rounded-2xl border border-white/5 bg-white/5 p-6">

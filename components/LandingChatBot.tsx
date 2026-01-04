@@ -40,13 +40,22 @@ const SUPPORTED_LANGUAGES: Language[] = [
     { code: 'hi', name: 'Hindi', native: 'हिन्दी', voice: 'Google हिन्दी' },
     { code: 'ar', name: 'Arabic', native: 'العربية', voice: 'Google Arabic' },
     { code: 'fr', name: 'French', native: 'Français', voice: 'Google Français' },
-    { code: 'es', name: 'Spanish', native: 'Español', voice: 'Google Español' }
+    { code: 'es', name: 'Spanish', native: 'Español', voice: 'Google Español' },
+    { code: 'de', name: 'German', native: 'Deutsch', voice: 'Google Deutsch' },
+    { code: 'ja', name: 'Japanese', native: '日本語', voice: 'Google 日本語' },
+    { code: 'zh', name: 'Chinese', native: '中文', voice: 'Google 普通话（中国大陆）' },
+    { code: 'pt', name: 'Portuguese', native: 'Português', voice: 'Google Português (Brasil)' },
+    { code: 'ru', name: 'Russian', native: 'Русский', voice: 'Google русский' }
 ];
 
-// Phonetic dictionary for South Asian languages → Insert or keep
+// Phonetic dictionary for proper noun pronunciation across languages
 const PHONETIC_MAP: Record<string, Record<string, string>> = {
-    'ur': { 'LumiX': 'لومکس', 'SMS': 'ایس ایم ایس', 'Genesis': 'جینیسس', 'AI': 'اے آئی' },
-    'hi': { 'LumiX': 'ल्यूमिक्स', 'SMS': 'एसएमएस', 'Genesis': 'जेनेसिस', 'AI': 'एआई' }
+    'ur': { 'LumiX': 'لومکس', 'SMS': 'ایس ایم ایس', 'Genesis': 'جینیسس', 'AI': 'اے آئی', 'NOVA': 'نووا' },
+    'hi': { 'LumiX': 'ल्यूमिक्स', 'SMS': 'एसएमएस', 'Genesis': 'जेनेसिस', 'AI': 'एआई', 'NOVA': 'नोवा' },
+    'ar': { 'LumiX': 'لوميكس', 'SMS': 'رسالة قصيرة', 'Genesis': 'تكوين', 'AI': 'الذكاء الاصطناعي', 'NOVA': 'نوفا' },
+    'ja': { 'LumiX': 'ルミックス', 'SMS': 'ショートメール', 'Genesis': 'ジェネシス', 'AI': 'エーアイ', 'NOVA': 'ノヴァ' },
+    'zh': { 'LumiX': 'LumiX', 'SMS': '短信', 'Genesis': '创世纪', 'AI': '人工智能', 'NOVA': '诺瓦' },
+    'ru': { 'LumiX': 'Люмикс', 'SMS': 'СМС', 'Genesis': 'Генезис', 'AI': 'ИИ', 'NOVA': 'НОВА' }
 };
 
 interface LandingChatBotProps {
@@ -57,7 +66,45 @@ const LandingChatBot: React.FC<LandingChatBotProps> = ({ onScrollTo }) => {
     const navigate = useNavigate();
     const [isOpen, setIsOpen] = useState(false);
     const [showLangMenu, setShowLangMenu] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
     const [currentLang, setCurrentLang] = useState<Language>(SUPPORTED_LANGUAGES[0]);
+
+    // Voice Settings
+    const [voiceSettings, setVoiceSettings] = useState({ pitch: 1.0, rate: 1.0, volume: 1.0 });
+    const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+
+    useEffect(() => {
+        const loadVoices = () => {
+            const voices = window.speechSynthesis.getVoices();
+            setAvailableVoices(voices);
+        };
+        loadVoices();
+        window.speechSynthesis.onvoiceschanged = loadVoices;
+        return () => { window.speechSynthesis.onvoiceschanged = null; };
+    }, []);
+
+    const getBestVoice = useCallback((langCode: string) => {
+        if (availableVoices.length === 0) return null;
+        
+        // precise mapping
+        const codeMap: Record<string, string> = {
+            'en': 'en-US', 'ur': 'ur-PK', 'hi': 'hi-IN', 'ar': 'ar-SA', 
+            'es': 'es-ES', 'fr': 'fr-FR', 'de': 'de-DE', 'ja': 'ja-JP',
+            'zh': 'zh-CN', 'pt': 'pt-BR', 'ru': 'ru-RU'
+        };
+
+        const target = codeMap[langCode] || langCode;
+        
+        // 1. Exact match on lang
+        let voice = availableVoices.find(v => v.lang === target);
+        if (voice) return voice;
+
+        // 2. Match on start of lang
+        voice = availableVoices.find(v => v.lang.startsWith(langCode));
+        if (voice) return voice;
+
+        return null;
+    }, [availableVoices]);
 
     const [messages, setMessages] = useState<Message[]>([
         { id: '1', text: "Hello! I'm NOVA. I'm the architect behind LumiX. It's truly a pleasure to meet you! Are you ready to explore how we're reshaping education together?", sender: 'ai', timestamp: new Date() }
@@ -75,8 +122,8 @@ const LandingChatBot: React.FC<LandingChatBotProps> = ({ onScrollTo }) => {
     const [speechError, setSpeechError] = useState<string | null>(null);
 
     // → SPEECH HANDLER
-    const speechIdRef = useRef<number>(0);  // → Insert this
-    const speak = useCallback((text: string) => {  // → Replace old simple speechSynthesis
+    const speechIdRef = useRef<number>(0);
+    const speak = useCallback((text: string) => {
         if (!isSpeaking || !('speechSynthesis' in window)) return;
         const currentSpeechId = ++speechIdRef.current;
         window.speechSynthesis.cancel();
@@ -90,19 +137,74 @@ const LandingChatBot: React.FC<LandingChatBotProps> = ({ onScrollTo }) => {
             });
         }
 
-        const chunks = processedText.match(/[^.!?]+[.!?]*|[^.!?]+/g) || [processedText];
+        // Improved splitting for natural rhythm (split by punctuation but keep it)
+        // Matches sentences ending with . ! ? or phrases with , ; :
+        const chunks = processedText.match(/[^.!?]+[.!?]+|[^,;:]+[,;:]+|[^.!?]+$/g) || [processedText];
+        
         let index = 0;
 
         const speakNext = () => {
             if (index >= chunks.length || currentSpeechId !== speechIdRef.current) return;
-            const utterance = new SpeechSynthesisUtterance(chunks[index]);
+            
+            const chunkText = chunks[index].trim();
+            if (!chunkText) {
+                index++;
+                speakNext();
+                return;
+            }
+
+            const utterance = new SpeechSynthesisUtterance(chunkText);
+            
+            // Dynamic Voice Selection with Accent Adaptation
+            const voice = getBestVoice(currentLang.code);
+            if (voice) {
+                utterance.voice = voice;
+                // Adjust pitch slightly for emotional inflection based on punctuation
+                if (chunkText.includes('?')) {
+                    utterance.pitch = Math.min(voiceSettings.pitch + 0.1, 2);
+                } else if (chunkText.includes('!')) {
+                    utterance.pitch = Math.min(voiceSettings.pitch + 0.05, 2);
+                    utterance.rate = Math.min(voiceSettings.rate + 0.1, 2);
+                } else {
+                    utterance.pitch = voiceSettings.pitch;
+                    utterance.rate = voiceSettings.rate;
+                }
+            }
+            
+            // Language Fallback
             utterance.lang = currentLang.code === 'ur' ? 'ur-PK' :
-                             currentLang.code === 'hi' ? 'hi-IN' : currentLang.code;
-            utterance.onend = () => { index++; speakNext(); };
+                             currentLang.code === 'hi' ? 'hi-IN' : 
+                             currentLang.code === 'ar' ? 'ar-SA' :
+                             currentLang.code === 'es' ? 'es-ES' :
+                             currentLang.code === 'fr' ? 'fr-FR' : 
+                             currentLang.code === 'de' ? 'de-DE' :
+                             currentLang.code === 'ja' ? 'ja-JP' :
+                             currentLang.code === 'zh' ? 'zh-CN' :
+                             currentLang.code === 'pt' ? 'pt-BR' :
+                             currentLang.code === 'ru' ? 'ru-RU' : 'en-US';
+
+            // Base Parameters
+            utterance.volume = voiceSettings.volume;
+
+            utterance.onend = () => { 
+                index++; 
+                // Natural pause calculation
+                // Longer pause for sentences (. ! ?), shorter for clauses (, ; :)
+                const pauseDuration = /[.!?]/.test(chunkText) ? 400 : 150;
+                
+                setTimeout(speakNext, pauseDuration); 
+            };
+            
+            utterance.onerror = (e) => {
+                console.warn("Speech synthesis error:", e);
+                index++;
+                speakNext();
+            };
+            
             window.speechSynthesis.speak(utterance);
         };
         speakNext();
-    }, [currentLang.code, isSpeaking]);
+    }, [currentLang.code, isSpeaking, voiceSettings, getBestVoice]);
 
     // → HANDLE SEND (REPLACE OLD fetch)
     const handleSend = useCallback(async (textOverride?: string) => {
@@ -164,12 +266,19 @@ const LandingChatBot: React.FC<LandingChatBotProps> = ({ onScrollTo }) => {
             'hi': "नमस्ते! मैं नोवा हूँ। मैं ल्यूमिक्स के पीछे की वास्तुकार हूँ। आपसे मिलकर वास्तव में खुशी हुई! क्या आप यह पता लगाने के लिए तैयार हैं कि हम मिलकर शिक्षा को कैसे नया आकार दे रहे हैं?",
             'ar': "مرحباً! أنا نوفا. أنا المهندسة المعمارية وراء لوميكس. إنه لمن دواعي سروري حقاً مقابلتك! هل أنت مستعد لاستكشاف كيف نعيد تشكيل التعليم معاً؟",
             'fr': "Bonjour ! Je suis NOVA. Je suis l'architecte derrière LumiX. C'est un réel plaisir de vous rencontrer ! Êtes-vous prêt à explorer comment nous remodelons ensemble l'éducation ?",
-            'es': "¡Hola! Soy NOVA. Soy la arquitecta detrás de LumiX. ¡Es un verdadero placer conocerte! ¿Estás listo para explorar cómo estamos remodelando la educación juntos?"
+            'es': "¡Hola! Soy NOVA. Soy la arquitecta detrás de LumiX. ¡Es un verdadero placer conocerte! ¿Estás listo para explorar cómo estamos remodelando la educación juntos?",
+            'de': "Hallo! Ich bin NOVA. Ich bin die Architektin hinter LumiX. Es ist mir ein Vergnügen, Sie kennenzulernen! Sind Sie bereit zu entdecken, wie wir gemeinsam die Bildung neu gestalten?",
+            'ja': "こんにちは！私はNOVAです。LumiXの背後にあるアーキテクトです。お会いできて本当に嬉しいです！私たちがどのように教育を再形成しているか、一緒に探求する準備はできていますか？",
+            'zh': "你好！我是NOVA。我是LumiX背后的架构师。很高兴见到你！你准备好探索我们将如何共同重塑教育了吗？",
+            'pt': "Olá! Eu sou NOVA. Sou a arquiteta por trás do LumiX. É um verdadeiro prazer conhecê-lo! Você está pronto para explorar como estamos remodelando a educação juntos?",
+            'ru': "Привет! Я NOVA. Я архитектор LumiX. Очень приятно познакомиться! Вы готовы узнать, как мы вместе меняем образование?"
         };
         if (greetings[currentLang.code]) {
             setMessages([{ id: '1', text: greetings[currentLang.code], sender: 'ai', timestamp: new Date() }]);
+            // Trigger speech for greeting
+            setTimeout(() => speak(greetings[currentLang.code]), 500);
         }
-    }, [currentLang]);
+    }, [currentLang, speak]);
 
     // → VOICE STATE
     const [callState, setCallState] = useState<VoiceCallState>({
@@ -245,7 +354,12 @@ const LandingChatBot: React.FC<LandingChatBotProps> = ({ onScrollTo }) => {
                            currentLang.code === 'hi' ? 'hi-IN' :
                            currentLang.code === 'ar' ? 'ar-SA' :
                            currentLang.code === 'es' ? 'es-ES' :
-                           currentLang.code === 'fr' ? 'fr-FR' : 'en-US';
+                           currentLang.code === 'fr' ? 'fr-FR' : 
+                           currentLang.code === 'de' ? 'de-DE' :
+                           currentLang.code === 'ja' ? 'ja-JP' :
+                           currentLang.code === 'zh' ? 'zh-CN' :
+                           currentLang.code === 'pt' ? 'pt-BR' :
+                           currentLang.code === 'ru' ? 'ru-RU' : 'en-US';
 
         recognition.onstart = () => {
             setIsListening(true);
@@ -410,6 +524,63 @@ const LandingChatBot: React.FC<LandingChatBotProps> = ({ onScrollTo }) => {
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
+                            {/* Voice Settings */}
+                            <div className="relative">
+                                <button 
+                                    onClick={() => setShowSettings(!showSettings)}
+                                    className={`p-2 hover:bg-white/10 rounded-lg transition-colors ${showSettings ? 'text-cyan-400 bg-cyan-950/30' : 'text-slate-400 hover:text-white'}`}
+                                    title="Voice Settings"
+                                >
+                                    <Settings size={18} />
+                                </button>
+                                {showSettings && (
+                                    <div className="absolute right-0 top-full mt-2 bg-slate-900 border border-white/10 rounded-lg shadow-xl p-4 w-64 z-50 animate-in slide-in-from-top-2">
+                                        <h4 className="text-xs font-bold text-white mb-3 font-sci-fi uppercase tracking-wider">Voice Parameters</h4>
+                                        
+                                        <div className="space-y-4">
+                                            <div>
+                                                <div className="flex justify-between text-[10px] text-slate-400 mb-1 font-mono">
+                                                    <span>SPEED</span>
+                                                    <span>{voiceSettings.rate.toFixed(1)}x</span>
+                                                </div>
+                                                <input 
+                                                    type="range" min="0.5" max="2" step="0.1"
+                                                    value={voiceSettings.rate}
+                                                    onChange={(e) => setVoiceSettings(p => ({...p, rate: parseFloat(e.target.value)}))}
+                                                    className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-cyan-400 [&::-webkit-slider-thumb]:rounded-full"
+                                                />
+                                            </div>
+                                            
+                                            <div>
+                                                <div className="flex justify-between text-[10px] text-slate-400 mb-1 font-mono">
+                                                    <span>PITCH</span>
+                                                    <span>{voiceSettings.pitch.toFixed(1)}</span>
+                                                </div>
+                                                <input 
+                                                    type="range" min="0.5" max="2" step="0.1"
+                                                    value={voiceSettings.pitch}
+                                                    onChange={(e) => setVoiceSettings(p => ({...p, pitch: parseFloat(e.target.value)}))}
+                                                    className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-purple-400 [&::-webkit-slider-thumb]:rounded-full"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <div className="flex justify-between text-[10px] text-slate-400 mb-1 font-mono">
+                                                    <span>VOLUME</span>
+                                                    <span>{Math.round(voiceSettings.volume * 100)}%</span>
+                                                </div>
+                                                <input 
+                                                    type="range" min="0" max="1" step="0.1"
+                                                    value={voiceSettings.volume}
+                                                    onChange={(e) => setVoiceSettings(p => ({...p, volume: parseFloat(e.target.value)}))}
+                                                    className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-emerald-400 [&::-webkit-slider-thumb]:rounded-full"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
                             <div className="relative">
                                 <button 
                                     onClick={() => setShowLangMenu(!showLangMenu)}

@@ -281,6 +281,7 @@ const SystemApp: React.FC = () => {
       addLog(AgentName.ASTRA, `Analysis complete`, "success");
     } catch {
       addLog(AgentName.ASTRA, `Analysis failed (AI unavailable)`, "error");
+      throw new Error("Analysis failed");
     }
   };
 

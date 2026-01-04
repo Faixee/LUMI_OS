@@ -114,6 +114,7 @@ class AIRequestLog(Base):
     output_len = Column(Integer, nullable=True)
     success = Column(Boolean, default=False, index=True)
     error_type = Column(String, nullable=True)
+    error_message = Column(Text, nullable=True)
     duration_ms = Column(Integer, nullable=True)
 
 class UserProfile(Base):

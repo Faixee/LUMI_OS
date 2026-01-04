@@ -84,7 +84,7 @@ const throwAuthOrPaywall = async (res: Response): Promise<never> => {
     throw err;
 };
 
-const request = async (path: string, payload: any, timeoutMs = 12000) => {
+const request = async (path: string, payload: any, timeoutMs = 60000) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -363,10 +363,10 @@ const ADAPTIVE_PROMPT_EXTENSION = (performance: number) => {
     return "Maintain intermediate difficulty. Focus on reinforcing core principles.";
 };
 
-export const generateQuiz = async (topic: string, difficulty: string, previousPerformance?: number) => {
+export const generateQuiz = async (topic: string, difficulty: string = 'Intermediate', lastScore?: number) => {
     let isDemo = isDemoLike();
     
-    const adaptiveContext = previousPerformance !== undefined ? ADAPTIVE_PROMPT_EXTENSION(previousPerformance) : "";
+    const adaptiveContext = lastScore !== undefined ? ADAPTIVE_PROMPT_EXTENSION(lastScore) : "";
     
     if (isDemo) {
         consumeDemoQuota('quiz');
@@ -417,6 +417,33 @@ export const generateQuiz = async (topic: string, difficulty: string, previousPe
                 explanation: "The correct definition is A."
             }
         ];
+    }
+};
+
+export const solveProblem = async (subject: string, topic: string, difficulty: string, grade: string, problem: string) => {
+    if (isDemoLike()) {
+        return {
+            subject,
+            difficulty,
+            steps: [
+                { title: "Step 1: Analysis", content: `Analyzing ${topic} problem in ${subject}...` },
+                { title: "Step 2: Execution", content: `Solving for Grade ${grade} level...` }
+            ],
+            final_answer: "Demo result: 42 (or appropriate for your query)",
+            verification_status: "Verified",
+            pedagogical_note: "Keep practicing consistent problem-solving steps."
+        };
+    }
+    try {
+        const res = await request('/ai/solve-problem', { subject, topic, difficulty, grade, problem });
+        if (!res.ok) {
+            if (res.status === 401 || res.status === 403) await throwAuthOrPaywall(res);
+            throw new Error(`AI request failed: /ai/solve-problem (${res.status})`);
+        }
+        return await res.json();
+    } catch (err: any) {
+        if (err.status === 401 || err.status === 403) throw err;
+        throw new Error("Neural link failure. Please try again later.");
     }
 };
 export const generateExplanation = async (topic: string): Promise<string> => {

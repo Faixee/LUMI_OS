@@ -64,11 +64,13 @@ FEATURE_MIN_PLAN: Dict[str, str] = {
     "ai_quiz": "basic",
     "ai_explain": "basic",
     "ai_grade": "basic",
+    "ai_tutor": "basic",
     "ai_neural_explain": "basic",
     "ai_finance": "pro",
     "ai_predict": "pro",
     "ai_report": "pro",
     "students_read": "pro",
+    "students_self": "free",
     "assignments_upload": "pro",
     "nexus_upload": "enterprise",
     "system_config": "enterprise",
@@ -435,9 +437,9 @@ class FeatureAccess:
         if is_developer_user(user):
             return user
 
-        # FREE USER RESTRICTION: Only allow 'ai_chat' (Nova chatbot)
+        # FREE USER RESTRICTION: Only allow 'ai_chat' and 'students_self'
         if is_demo_user(user) or not is_subscription_active(user):
-            if self.feature != "ai_chat":
+            if self.feature not in ["ai_chat", "students_self"]:
                  raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=_error_detail("PAID_SUBSCRIPTION_REQUIRED", f"Feature '{self.feature}' requires an active subscription")

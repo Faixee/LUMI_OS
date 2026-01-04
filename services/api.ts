@@ -399,15 +399,32 @@ export const api = {
     try {
         const res = await fetch(`${API_URL}/fees/`, { headers: getHeaders() });
         if (!res.ok) await throwHttpError(res);
-        const data = await res.json();
-        return data.map((f: any) => ({
-            ...f,
-            studentId: f.student_id,
-            studentName: f.student_name,
-            dueDate: f.due_date
-        }));
+        return await res.json();
     } catch (e) { return []; }
   },
+
+  // --- AI GRADER ---
+  analyzeReference: async (formData: FormData) => {
+    const res = await fetch(`${API_URL}/ai/analyze-reference`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: formData
+    });
+    if (!res.ok) await throwHttpError(res);
+    return await res.json();
+  },
+
+  gradeAssignment: async (formData: FormData) => {
+    const res = await fetch(`${API_URL}/ai/grade`, {
+      method: 'POST',
+      headers: getHeaders(true),
+      body: formData
+    });
+    if (!res.ok) await throwHttpError(res);
+    return await res.json();
+  },
+
+  // --- OTHERS ---
 
   // --- CSV UPLOAD ---
   uploadCSV: async (file: File) => {
@@ -439,21 +456,6 @@ export const api = {
     const formData = new FormData();
     formData.append('file', file);
     const res = await fetch(`${API_URL}/assignments/upload`, {
-        method: 'POST',
-        headers: getHeaders(true),
-        body: formData
-    });
-    if (!res.ok) {
-      await throwHttpError(res);
-    }
-    return await res.json();
-  },
-
-  gradeAssignment: async (file: File, context: string = "") => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('context', context);
-    const res = await fetch(`${API_URL}/ai/grade`, {
         method: 'POST',
         headers: getHeaders(true),
         body: formData

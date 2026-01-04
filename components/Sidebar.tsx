@@ -148,7 +148,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, userRole, 
             <div className="flex items-center gap-4">
               <div className="relative group/logo">
                 <div 
-                    className={`w-12 h-12 rounded-xl flex items-center justify-center backdrop-blur-md border transition-all duration-500 shadow-lg ${isDemo ? 'bg-amber-500/20 border-amber-500/50 shadow-amber-500/20' : 'border-white/20 shadow-[0_0_20px_rgba(255,255,255,0.1)]'}`}
+                    className={`relative w-12 h-12 rounded-xl flex items-center justify-center backdrop-blur-md border transition-all duration-500 shadow-lg ${isDemo ? 'bg-amber-500/20 border-amber-500/50 shadow-amber-500/20' : 'border-white/20 shadow-[0_0_20px_rgba(255,255,255,0.1)]'}`}
                     style={!isDemo ? { 
                         backgroundColor: `${brandColor}22`, 
                         color: brandColor,
@@ -156,10 +156,24 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, userRole, 
                         boxShadow: `0 0 15px ${brandColor}33`
                     } : { color: '#f59e0b' }}
                 >
+                  <style>{`
+                    .fallback-icon-visible + .fallback-icon {
+                      display: flex !important;
+                    }
+                  `}</style>
                    {isDemo ? (
                      <Shield size={24} />
                    ) : schoolConfig?.logoUrl ? (
-                     <img src={schoolConfig.logoUrl} alt="Logo" className="w-full h-full object-contain rounded-lg" />
+                     <img 
+                       src={schoolConfig.logoUrl.startsWith('http') ? `/api/proxy-image?url=${encodeURIComponent(schoolConfig.logoUrl)}` : schoolConfig.logoUrl} 
+                       alt="Logo" 
+                       className="w-full h-full object-contain rounded-lg"
+                       onError={(e) => {
+                         // Fallback on error (e.g., ORB block)
+                         e.currentTarget.style.display = 'none';
+                         e.currentTarget.parentElement?.classList.add('fallback-icon-visible');
+                       }} 
+                     />
                    ) : userRole === 'student' ? (
                      <GraduationCap size={24} />
                    ) : (

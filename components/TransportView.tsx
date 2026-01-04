@@ -24,8 +24,10 @@ interface TransportViewProps {
 
 const TransportView: React.FC<TransportViewProps> = ({ fleet = [] }) => {
   const [simFleet, setSimFleet] = useState<SimBus[]>([]);
-  const [selectedBus, setSelectedBus] = useState<SimBus | null>(null);
+  const [selectedBusId, setSelectedBusId] = useState<string | null>(null);
   const [optimizing, setOptimizing] = useState(false);
+  
+  const selectedBus = simFleet.find(b => b.id === selectedBusId) || null;
   
   // Initialize Physics State based on Props
   useEffect(() => {
@@ -78,14 +80,6 @@ const TransportView: React.FC<TransportViewProps> = ({ fleet = [] }) => {
     animationFrameId = requestAnimationFrame(updatePosition);
     return () => cancelAnimationFrame(animationFrameId);
   }, [simFleet.length > 0]);
-
-  // Update selected bus data
-  useEffect(() => {
-      if (selectedBus) {
-          const liveData = simFleet.find(b => b.id === selectedBus.id);
-          if (liveData) setSelectedBus(liveData);
-      }
-  }, [simFleet, selectedBus]);
 
   const handleOptimize = () => {
       setOptimizing(true);
@@ -149,7 +143,7 @@ const TransportView: React.FC<TransportViewProps> = ({ fleet = [] }) => {
              {simFleet.map((bus) => (
                 <div 
                     key={bus.id} 
-                    onClick={() => setSelectedBus(bus)}
+                    onClick={() => setSelectedBusId(bus.id)}
                     className="absolute flex flex-col items-center group cursor-pointer transition-transform duration-300 hover:scale-125 z-10"
                     style={{ 
                         top: `${bus.y}%`, 
@@ -207,7 +201,7 @@ const TransportView: React.FC<TransportViewProps> = ({ fleet = [] }) => {
             {simFleet.map(bus => (
                 <div 
                     key={bus.id} 
-                    onClick={() => setSelectedBus(bus)}
+                    onClick={() => setSelectedBusId(bus.id)}
                     className={`glass-panel p-4 rounded-xl border transition-all cursor-pointer group ${
                         selectedBus?.id === bus.id 
                             ? 'border-cyan-500 bg-cyan-900/10 shadow-[0_0_20px_rgba(6,182,212,0.15)]' 

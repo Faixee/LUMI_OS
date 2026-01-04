@@ -15,13 +15,15 @@ import time
 import json
 import logging
 import base64
+import re
 from typing import List, Dict, Any, Optional
 from openai import OpenAI
 from backend.config import settings
 
 try:
     import google.generativeai as genai
-except ImportError:
+except Exception as e:
+    print(f"AI System: Could not import google-generativeai: {e}")
     genai = None
 
 # Configure logging
@@ -54,20 +56,27 @@ class SimpleCache:
 class AIService:
     def __init__(self, openai_api_key: str, gemini_api_key: str):
         self.client = OpenAI(api_key=openai_api_key) if openai_api_key else None
-        self.openai_model = "gpt-4-turbo-preview" 
-        self.model = "gpt-4-turbo-preview" # Ensure this is ALWAYS set
+        # Nova Core uses OpenAI GPT-4o
+        self.nova_model = "gpt-4o"
+        self.model = "gpt-4o" # Default model for Nova operations
+        
         self.gemini_available = False
         self.cache = SimpleCache() # Initialize cache
+        
         if gemini_api_key and genai:
             try:
                 genai.configure(api_key=gemini_api_key)
-                self.vision_model = genai.GenerativeModel('gemini-3-flash-preview')
+                # LumiX Core uses Gemini 2.0 Flash (Latest)
+                self.lumix_model = genai.GenerativeModel('gemini-2.0-flash')
+                self.vision_model = self.lumix_model # Alias for backward compatibility
                 self.gemini_available = True
-                logger.info("AI System: Gemini 3 Flash Preview initialized in AIService")
+                logger.info("AI System: LumiX (Gemini 2.0 Flash) initialized")
             except Exception as e:
-                logger.error(f"AI System: Failed to initialize Gemini in AIService: {e}")
+                logger.error(f"AI System: Failed to initialize LumiX (Gemini): {e}")
+                self.lumix_model = None
                 self.vision_model = None
         else:
+            self.lumix_model = None
             self.vision_model = None
         self.metrics = {
             "openai_requests": 0,
@@ -97,27 +106,92 @@ class AIService:
             
         self.metrics[key] += 1
         self.metrics["total_tokens"] += tokens
+        
+        try:
+            # Optional: Log strictly internal metrics or persist if needed
+            pass
+        except Exception as e:
+            logger.error(f"Metric update error: {e}")
 
-    async def process_vision_grading(self, image_data: bytes, mime_type: str, context: str = "") -> Dict[str, Any]:
+    async def analyze_reference_material(self, content: str, mime_type: str = "text/plain") -> Dict[str, Any]:
         """
-        Process an image/document for grading using Gemini Vision.
+        Analyze reference material (text or image) to extract answer key and criteria.
         """
-        if not self.gemini_available or not self.vision_model:
-            logger.error("Gemini Vision not available")
-            return {"error": "Vision AI service is currently unavailable."}
+        prompt = """
+        Analyze this reference material (Answer Key / Marking Scheme).
+        Extract:
+        1. All questions and their correct answers.
+        2. Marking criteria or rubric (points per question, partial credit rules).
+        3. Total marks available.
+        
+        Return JSON:
+        {
+            "answers": [{"q": "1", "answer": "The powerhouse of the cell", "marks": 2}, ...],
+            "total_marks": 100,
+            "criteria": "Summary of grading rules...",
+            "summary": "Brief overview of the paper topic"
+        }
+        """
+        
+        if self.gemini_available and self.vision_model:
+            try:
+                # If it's an image
+                if mime_type.startswith("image/"):
+                    response = await self.vision_model.generate_content_async([prompt, {"mime_type": mime_type, "data": content}])
+                else:
+                    # Text content
+                    response = await self.vision_model.generate_content_async([prompt, f"CONTENT:\n{content}"])
+                
+                return self._parse_json(response.text)
+            except Exception as e:
+                logger.error(f"Reference Analysis Error: {e}")
+                raise
+        
+        # Fallback for text only via OpenAI
+        if not mime_type.startswith("image/") and self.client:
+             response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a teacher's assistant."},
+                    {"role": "user", "content": f"{prompt}\n\nCONTENT:\n{content}"}
+                ],
+                response_format={"type": "json_object"}
+            )
+             return json.loads(response.choices[0].message.content)
+             
+        return {"error": "AI service unavailable for this operation"}
+
+    async def process_vision_grading(self, image_data: bytes, mime_type: str, context: str = "", reference_data: Optional[Dict] = None) -> Dict[str, Any]:
+        """
+        Process an image/document for grading using Gemini Vision or OpenAI Vision.
+        """
+        ref_context = ""
+        if reference_data:
+            ref_context = f"""
+            REFERENCE ANSWER KEY:
+            {json.dumps(reference_data.get('answers', []), indent=2)}
+            
+            GRADING CRITERIA:
+            {reference_data.get('criteria', 'Standard academic grading')}
+            
+            IMPORTANT: Compare the student's work strictly against this reference. 
+            Highlight deviations. Calculate score based on the provided marks distribution.
+            """
 
         prompt = f"""
         You are an expert academic evaluator. Analyze the attached document/image and provide a detailed grading report.
         
         CONTEXT: {context}
+        {ref_context}
 
         INSTRUCTIONS:
         1. Identify the student name if visible.
-        2. Evaluate the content based on academic standards.
-        3. Provide a score out of 100.
+        2. Evaluate the content based on academic standards {'and the provided REFERENCE KEY' if reference_data else ''}.
+        3. Provide a score out of {reference_data.get('total_marks', 100) if reference_data else '100'}.
         4. Give detailed feedback with specific points (✅ for correct, ❌ for errors, ⚠️ for warnings).
         5. Generate a few 'annotations' which are specific areas of interest (as text descriptions).
         6. Generate 'insights' about the student's learning patterns.
+        {'7. Calculate a reference_match_score (0-100) indicating how closely they followed the key.' if reference_data else ''}
 
         RETURN ONLY A JSON OBJECT with this structure:
         {{
@@ -132,34 +206,370 @@ class AIService:
                 "strengths": ["Thermodynamics", "Diagrams"],
                 "weaknesses": ["Unit conversions"],
                 "recommendation": "Practice multi-step algebraic manipulations."
-            }}
+            }},
+            "reference_match_score": 95.0
         }}
         """
 
-        try:
-            # Prepare image part
-            image_part = {
-                "mime_type": mime_type,
-                "data": image_data
-            }
+        # Try Gemini first
+        if self.gemini_available and self.vision_model:
+            try:
+                logger.info("Attempting Gemini Vision...")
+                start_time = time.time()
+                # Prepare image part
+                image_part = {
+                    "mime_type": mime_type,
+                    "data": image_data
+                }
 
-            response = await self.vision_model.generate_content_async([prompt, image_part])
-            text = response.text
-            
-            # Clean up JSON response if AI included markdown blocks
-            if "```json" in text:
-                text = text.split("```json")[1].split("```")[0].strip()
-            elif "```" in text:
-                text = text.split("```")[1].split("```")[0].strip()
-            
-            result = json.loads(text)
-            return result
+                response = await self.vision_model.generate_content_async([prompt, image_part])
+                duration_ms = (time.time() - start_time) * 1000
+                
+                text = response.text
+                result = self._parse_json(text)
+                
+                # Check for parsing error and return fallback
+                if "error" in result:
+                    logger.warning(f"Gemini Vision JSON Parse Failed. Raw: {text[:200]}")
+                    return {
+                        "student": "Unknown Student",
+                        "score": 0,
+                        "feedback": "Automated Grading Failed: The AI could not process this image via Gemini.",
+                        "annotations": [],
+                        "insights": {
+                            "strengths": ["N/A"],
+                            "weaknesses": ["Image processing failed"],
+                            "recommendation": "Please try again or use a different image."
+                        },
+                        "flags": ["System Error"],
+                        "grading_confidence": 0.0
+                    }
 
-        except Exception as e:
-            logger.error(f"Gemini Vision Error: {e}")
-            return {"error": f"Failed to process image: {str(e)}"}
+                self._update_metrics(duration_ms, source="gemini")
+                return result
+            except Exception as e:
+                logger.error(f"Gemini Vision Error: {e}")
 
-    async def generate_syllabus(self, topic: str, grade: str, weeks: int) -> List[Dict[str, Any]]:
+        # Fallback to OpenAI Vision
+        if self.client:
+            try:
+                logger.info("Attempting OpenAI Vision Fallback...")
+                start_time = time.time()
+                
+                # Convert image data to base64 for OpenAI
+                import base64 as b64
+                base64_image = b64.b64encode(image_data).decode('utf-8')
+                
+                # Log a small part of the base64 and mime type for debugging
+                logger.info(f"OpenAI Vision Attempt - Mime: {mime_type}, Base64 length: {len(base64_image)}")
+
+                # Verify base64 image is not empty
+                if not base64_image:
+                    logger.error("Empty base64 image data")
+                    return {"error": "Failed to process image data"}
+
+                response = self.client.chat.completions.create(
+                    model=self.nova_model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are a vision-capable AI that provides academic grading. You MUST return valid JSON matching the requested structure. Even if you cannot see the image clearly, provide a best guess or empty structure in JSON. JSON structure: {\"student\": \"string\", \"score\": number, \"feedback\": \"string\", \"annotations\": [{\"point\": \"string\", \"comment\": \"string\"}], \"insights\": {\"strengths\": [\"string\"], \"weaknesses\": [\"string\"], \"recommendation\": \"string\"}, \"flags\": [\"string\"], \"grading_confidence\": number}"
+                        },
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:{mime_type};base64,{base64_image}"
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    max_tokens=1000,
+                    response_format={"type": "json_object"}
+                )
+                duration_ms = (time.time() - start_time) * 1000
+                
+                text = response.choices[0].message.content
+                result = self._parse_json(text)
+                
+                # Check for parsing error and return fallback
+                if "error" in result:
+                    logger.warning(f"OpenAI Vision JSON Parse Failed. Raw: {text[:200]}")
+                    return {
+                        "student": "Unknown Student",
+                        "score": 0,
+                        "feedback": "Automated Grading Failed: The AI could not process this image. It may not be recognized as an academic document. Please try uploading a clearer image of an assignment.",
+                        "annotations": [],
+                        "insights": {
+                            "strengths": ["N/A"],
+                            "weaknesses": ["Image not recognized as academic content"],
+                            "recommendation": "Upload a clear image of a student assignment or quiz."
+                        },
+                        "flags": ["Parsing Error"],
+                        "grading_confidence": 0.0
+                    }
+
+                self._update_metrics(duration_ms, source="openai")
+                return result
+            except Exception as e:
+                logger.error(f"OpenAI Vision Error: {e}")
+
+        return {"error": "All vision links are currently offline. Please check your API configuration."}
+
+    async def predict_performance(self, student_data: Dict[str, Any]) -> str:
+        """Predict student performance based on historical data."""
+        prompt = f"""
+        Predict future performance for the following student:
+        Name: {student_data.get('name')}
+        GPA: {student_data.get('gpa')}
+        Attendance: {student_data.get('attendance') or 0}%
+        Behavior Score: {student_data.get('behavior_score') or 0}
+        
+        Analyze patterns and provide a 2-3 sentence prediction about their academic trajectory.
+        Be professional and supportive.
+        """
+
+        # Try Gemini first
+        if self.gemini_available and self.vision_model:
+            try:
+                start_time = time.time()
+                response = await self.vision_model.generate_content_async(prompt)
+                duration_ms = (time.time() - start_time) * 1000
+                
+                text = response.text
+                if text:
+                    self._update_metrics(duration_ms, source="gemini")
+                    return text
+            except Exception as e:
+                logger.error(f"Gemini Prediction Error: {e}")
+
+        # Fallback to OpenAI
+        if self.client:
+            try:
+                start_time = time.time()
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": "You are a predictive analytics engine for educational success."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.7
+                )
+                duration_ms = (time.time() - start_time) * 1000
+                
+                text = response.choices[0].message.content
+                if text:
+                    self._update_metrics(duration_ms, source="openai")
+                    return text
+            except Exception as e:
+                logger.error(f"OpenAI Prediction Error: {e}")
+
+        return "Performance prediction unavailable at this moment."
+
+    async def solve_educational_problem(self, subject: str, topic: str, difficulty: str, grade: str, problem: str) -> Dict[str, Any]:
+        """
+        Solve an educational problem with step-by-step explanation and verification.
+        """
+        # Subject-specific guidance
+        subject_guidance = {
+            "mathematics": """Ensure all mathematical notations use LaTeX format (e.g., $x^2$). 
+            CRITICAL: Perform actual numerical arithmetic. Never concatenate numbers as strings (e.g., 10 + 10 is 20, NOT 1010).
+            Follow BODMAS rules strictly. For basic addition, show column-wise or place-value breakdown (tens, ones).
+            Ensure the output shows the correct calculation: "10 + 10 = 20".""",
+            "physics": "Include relevant laws of physics (Newton's laws, Thermodynamics, etc.). Show unit conversions clearly. Use standard scientific notation.",
+            "chemistry": "Use proper chemical notation for formulas (e.g., H₂O). Include balanced equations where applicable. Explain bonding and stoichiometry steps clearly."
+        }.get(subject.lower(), "Provide a clear academic explanation.")
+
+        prompt = f"""
+        You are an advanced Neural Tutor (NOVA Core) specialized in {subject}.
+        
+        TASK: Solve the following problem for a Grade {grade} student at an {difficulty} difficulty level.
+        
+        SUBJECT: {subject}
+        TOPIC: {topic}
+        DIFFICULTY: {difficulty}
+        GRADE LEVEL: Grade {grade}
+        PROBLEM: {problem}
+        
+        GUIDANCE: {subject_guidance}
+        
+        INSTRUCTIONS:
+        1. ANALYZE: Break down the problem and identify key concepts.
+        2. TYPE CHECKING: Distinguish clearly between numerical values and string representations. Perform arithmetic operations on numbers.
+        3. STEP-BY-STEP SOLUTION: Provide a detailed, logical sequence of steps.
+           - For addition: Explain place value (e.g., 1+1 in tens place = 2, 0+0 in ones place = 0).
+           - Do NOT repeat operands in the result (e.g., no "1010+1010=2020").
+        4. VERIFICATION: Perform a self-check to ensure mathematical accuracy. Ensure the step-by-step explanation matches the final computation.
+        5. EXPLANATION: Use clear, pedagogical language appropriate for Grade {grade}.
+        6. FORMATTING: Use Markdown. Use LaTeX for ALL mathematical formulas.
+        
+        RETURN ONLY A JSON OBJECT with this structure:
+        {{
+            "subject": "{subject}",
+            "difficulty": "{difficulty}",
+            "steps": [
+                {{"title": "Step 1: Identify the Operation", "content": "..."}},
+                {{"title": "Step 2: Perform the Arithmetic Calculation", "content": "..."}}
+            ],
+            "final_answer": "The final result clearly stated (e.g., 10 + 10 = 20).",
+            "verification_status": "Verified",
+            "pedagogical_note": "..."
+        }}
+        """
+
+        # Try Gemini first
+        if self.gemini_available and self.vision_model:
+            try:
+                start_time = time.time()
+                response = await self.vision_model.generate_content_async(prompt)
+                duration_ms = (time.time() - start_time) * 1000
+                
+                text = response.text
+                result = self._parse_json(text)
+                
+                self._update_metrics(duration_ms, source="gemini")
+                return result
+            except Exception as e:
+                logger.error(f"Gemini Solver Error: {e}")
+                # Fall through to OpenAI
+
+        # Fallback to OpenAI
+        if self.client:
+            try:
+                start_time = time.time()
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": "You are a professional educational tutor specializing in solving problems accurately."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.7,
+                    max_tokens=2048
+                )
+                duration_ms = (time.time() - start_time) * 1000
+                
+                text = response.choices[0].message.content
+                result = self._parse_json(text)
+                
+                self._update_metrics(duration_ms, source="openai")
+                return result
+            except Exception as e:
+                logger.error(f"OpenAI Solver Error: {e}")
+
+        return {"error": "All neural links are currently offline. Please check your API configuration."}
+
+    async def analyze_url(self, url: str, site_snippet: str) -> Dict[str, Any]:
+        """Analyze a school website to extract brand identity."""
+        prompt = f"""
+        Act as a professional Brand Architect and Web Analyst.
+        Target URL: {url}
+        
+        {site_snippet}
+        
+        Analyze the school identity and extract/synthesize the following:
+        1. Official School Name (Clean, formal version)
+        2. School Motto or Tagline (If found in HTML, use it. Otherwise, synthesize a professional one)
+        3. PRIMARY BRAND COLOR (The dominant color. MUST be a valid HEX code)
+        4. SECONDARY BRAND COLOR (The accent color. MUST be a valid HEX code)
+        5. LOGO URL (Look for the main logo in the header, favicon, or og:image. If it's a relative path, resolve it to a full URL. If not found, use a professional placeholder)
+        6. Brief Brand Context (3-4 sentences about their mission and values based on the content)
+        
+        Return ONLY a JSON object in this exact format:
+        {{
+            "name": "string",
+            "motto": "string",
+            "primaryColor": "string",
+            "secondaryColor": "string",
+            "logoUrl": "string",
+            "websiteContext": "string"
+        }}
+        """
+
+        # Try Gemini first
+        if self.gemini_available and self.vision_model:
+            try:
+                start_time = time.time()
+                response = await self.vision_model.generate_content_async(prompt)
+                duration_ms = (time.time() - start_time) * 1000
+                
+                text = response.text
+                result = self._parse_json(text)
+                
+                self._update_metrics(duration_ms, source="gemini")
+                return result
+            except Exception as e:
+                logger.error(f"Gemini URL Analysis Error: {e}")
+
+        # Fallback to OpenAI
+        if self.client:
+            try:
+                start_time = time.time()
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": "You are a professional brand analyst."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.2
+                )
+                duration_ms = (time.time() - start_time) * 1000
+                
+                text = response.choices[0].message.content
+                result = self._parse_json(text)
+                
+                self._update_metrics(duration_ms, source="openai")
+                return result
+            except Exception as e:
+                logger.error(f"OpenAI URL Analysis Error: {e}")
+
+        return {"error": "Brand analysis service is currently offline."}
+
+    async def chat(self, prompt: str, context: str = "") -> str:
+        """Generic AI chat functionality."""
+        full_prompt = f"{context}\n\n{prompt}" if context else prompt
+
+        # Try Gemini first
+        if self.gemini_available and self.vision_model:
+            try:
+                start_time = time.time()
+                response = await self.vision_model.generate_content_async(full_prompt)
+                duration_ms = (time.time() - start_time) * 1000
+                
+                text = response.text
+                if text:
+                    self._update_metrics(duration_ms, source="gemini")
+                    return text
+            except Exception as e:
+                logger.error(f"Gemini Chat Error: {e}")
+
+        # Fallback to OpenAI
+        if self.client:
+            try:
+                start_time = time.time()
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": "You are NOVA, a helpful AI assistant for the LUMI OS educational platform."},
+                        {"role": "user", "content": full_prompt}
+                    ],
+                    temperature=0.7
+                )
+                duration_ms = (time.time() - start_time) * 1000
+                
+                text = response.choices[0].message.content
+                if text:
+                    self._update_metrics(duration_ms, source="openai")
+                    return text
+            except Exception as e:
+                logger.error(f"OpenAI Chat Error: {e}")
+
+        return "I'm sorry, I'm having trouble connecting to my neural network right now."
+
+    async def generate_syllabus(self, topic: str, grade: str, weeks: int = 4) -> Dict[str, Any]:
         """Generate a structured syllabus using Gemini."""
         cache_key = f"syllabus:{topic}:{grade}:{weeks}"
         cached = self.cache.get(cache_key)
@@ -168,47 +578,90 @@ class AIService:
             logger.info(f"Cache hit for {cache_key}")
             return cached
 
-        if not self.gemini_available or not self.vision_model:
-            return []
-
         prompt = f"""
-        Create a {weeks}-week academic syllabus for the topic "{topic}" tailored for Grade {grade}.
+        Generate a comprehensive {weeks}-week educational syllabus for the topic "{topic}" appropriate for Grade {grade}.
         
-        RETURN ONLY A JSON ARRAY of objects with this structure:
-        [
-            {{
-                "week": 1,
-                "topic": "Intro to {topic}",
-                "details": "Basic concepts and definitions...",
-                "activity": "Group discussion and quiz"
-            }}
-        ]
+        The syllabus should be structured by week and include:
+        1. Week Title
+        2. Learning Objectives
+        3. Key Concepts
+        4. Brief Activity Idea
         
-        Rules:
-        1. Weeks must be exactly {weeks}.
-        2. Content must be age-appropriate for Grade {grade}.
-        3. Return ONLY raw JSON. No markdown blocks.
+        RETURN ONLY A JSON OBJECT with this structure:
+        {{
+            "topic": "{topic}",
+            "grade": "{grade}",
+            "weeks": [
+                {{
+                    "week": 1,
+                    "title": "Introduction to...",
+                    "objectives": ["...", "..."],
+                    "concepts": ["...", "..."],
+                    "activity": "..."
+                }}
+            ]
+        }}
+        
+        Return ONLY raw JSON.
         """
 
-        try:
-            start_time = time.time()
-            response = await self.vision_model.generate_content_async(prompt)
-            duration_ms = (time.time() - start_time) * 1000
-            
-            text = response.text
-            result = self._parse_json(text)
-            
-            if result:
-                self.cache.set(cache_key, result)
-                # Estimate tokens for Gemini (roughly 4 chars per token)
-                tokens = (len(prompt) + len(text)) // 4
-                self._update_metrics(duration_ms, tokens, source="gemini")
-            
-            return result
-        except Exception as e:
-            logger.error(f"Syllabus Gen Error: {e}")
-            self._update_metrics(0, error=True)
-            return []
+        # Try Gemini first
+        if self.gemini_available and self.vision_model:
+            try:
+                start_time = time.time()
+                response = await self.vision_model.generate_content_async(prompt)
+                duration_ms = (time.time() - start_time) * 1000
+                
+                text = response.text
+                result = self._parse_json(text)
+                
+                if result:
+                    self.cache.set(cache_key, result)
+                    tokens = (len(prompt) + len(text)) // 4
+                    self._update_metrics(duration_ms, tokens, source="gemini")
+                    return result
+            except Exception as e:
+                logger.error(f"Gemini Syllabus Error: {e}")
+
+        # Fallback to OpenAI
+        if self.client:
+            try:
+                start_time = time.time()
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": "You are a professional academic curriculum designer."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.7
+                )
+                duration_ms = (time.time() - start_time) * 1000
+                
+                text = response.choices[0].message.content
+                result = self._parse_json(text)
+                
+                if result:
+                    self.cache.set(cache_key, result)
+                    tokens = (len(prompt) + len(text)) // 4
+                    self._update_metrics(duration_ms, tokens, source="openai")
+                    return result
+            except Exception as e:
+                logger.error(f"OpenAI Syllabus Error: {e}")
+
+        # Return a meaningful structure if both AI fail
+        return {
+            "topic": topic,
+            "grade": grade,
+            "weeks": [
+                {
+                    "week": i + 1,
+                    "title": f"Intro to {topic} - Part {i + 1}",
+                    "objectives": ["Understand core concepts", "Identify key terminology"],
+                    "concepts": [topic, "Fundamental principles"],
+                    "activity": "Guided research and discussion"
+                } for i in range(weeks)
+            ]
+        }
 
     async def generate_flashcards(self, topic: str, count: int = 10) -> List[Dict[str, Any]]:
         """Generate flashcards for a topic."""
@@ -217,9 +670,6 @@ class AIService:
         if cached:
             logger.info(f"Cache hit for {cache_key}")
             return cached
-
-        if not self.gemini_available or not self.vision_model:
-            return []
 
         prompt = f"""
         Generate {count} educational flashcards for the topic "{topic}".
@@ -235,15 +685,50 @@ class AIService:
         Return ONLY raw JSON.
         """
 
-        try:
-            response = await self.vision_model.generate_content_async(prompt)
-            result = self._parse_json(response.text)
-            if result:
-                self.cache.set(cache_key, result)
-            return result
-        except Exception as e:
-            logger.error(f"Flashcard Gen Error: {e}")
-            return []
+        # Try Gemini first
+        if self.gemini_available and self.vision_model:
+            try:
+                start_time = time.time()
+                response = await self.vision_model.generate_content_async(prompt)
+                duration_ms = (time.time() - start_time) * 1000
+                
+                text = response.text
+                result = self._parse_json(text)
+                
+                if result:
+                    self.cache.set(cache_key, result)
+                    tokens = (len(prompt) + len(text)) // 4
+                    self._update_metrics(duration_ms, tokens, source="gemini")
+                    return result
+            except Exception as e:
+                logger.error(f"Gemini Flashcard Error: {e}")
+
+        # Fallback to OpenAI
+        if self.client:
+            try:
+                start_time = time.time()
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": "You are a professional educational content creator."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.7
+                )
+                duration_ms = (time.time() - start_time) * 1000
+                
+                text = response.choices[0].message.content
+                result = self._parse_json(text)
+                
+                if result:
+                    self.cache.set(cache_key, result)
+                    tokens = (len(prompt) + len(text)) // 4
+                    self._update_metrics(duration_ms, tokens, source="openai")
+                    return result
+            except Exception as e:
+                logger.error(f"OpenAI Flashcard Error: {e}")
+
+        return []
 
     async def generate_quiz(self, topic: str, count: int = 5) -> List[Dict[str, Any]]:
         """Generate a multiple choice quiz."""
@@ -252,9 +737,6 @@ class AIService:
         if cached:
             logger.info(f"Cache hit for {cache_key}")
             return cached
-
-        if not self.gemini_available or not self.vision_model:
-            return []
 
         prompt = f"""
         Create a {count}-question multiple choice quiz about "{topic}".
@@ -272,28 +754,139 @@ class AIService:
         Return ONLY raw JSON.
         """
 
-        try:
-            response = await self.vision_model.generate_content_async(prompt)
-            result = self._parse_json(response.text)
-            if result:
-                self.cache.set(cache_key, result)
-            return result
-        except Exception as e:
-            logger.error(f"Quiz Gen Error: {e}")
-            return []
+        # Try Gemini first
+        if self.gemini_available and self.vision_model:
+            try:
+                start_time = time.time()
+                response = await self.vision_model.generate_content_async(prompt)
+                duration_ms = (time.time() - start_time) * 1000
+                
+                text = response.text
+                result = self._parse_json(text)
+                
+                if result:
+                    self.cache.set(cache_key, result)
+                    tokens = (len(prompt) + len(text)) // 4
+                    self._update_metrics(duration_ms, tokens, source="gemini")
+                    return result
+            except Exception as e:
+                logger.error(f"Gemini Quiz Error: {e}")
+
+        # Fallback to OpenAI
+        if self.client:
+            try:
+                start_time = time.time()
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": "You are a professional educational assessment designer."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.7
+                )
+                duration_ms = (time.time() - start_time) * 1000
+                
+                text = response.choices[0].message.content
+                result = self._parse_json(text)
+                
+                if result:
+                    self.cache.set(cache_key, result)
+                    tokens = (len(prompt) + len(text)) // 4
+                    self._update_metrics(duration_ms, tokens, source="openai")
+                    return result
+            except Exception as e:
+                logger.error(f"OpenAI Quiz Error: {e}")
+
+        return []
+
+    async def generate_report(self, student_data: Dict[str, Any]) -> str:
+        """Generate a weekly academic report for a student."""
+        prompt = f"""
+        Generate a comprehensive weekly academic report for the following student:
+        Name: {student_data.get('name')}
+        GPA: {student_data.get('gpa')}
+        Attendance: {student_data.get('attendance')}%
+        Behavior: {student_data.get('behavior_score')}
+        Notes: {student_data.get('notes')}
+        
+        The report should be professional, encouraging, and provide actionable insights for parents.
+        Use Markdown formatting.
+        """
+
+        # Try Gemini first
+        if self.gemini_available and self.vision_model:
+            try:
+                start_time = time.time()
+                response = await self.vision_model.generate_content_async(prompt)
+                duration_ms = (time.time() - start_time) * 1000
+                
+                text = response.text
+                if text:
+                    self._update_metrics(duration_ms, source="gemini")
+                    return text
+            except Exception as e:
+                logger.error(f"Gemini Report Error: {e}")
+
+        # Fallback to OpenAI
+        if self.client:
+            try:
+                start_time = time.time()
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": "You are a professional academic advisor and counselor."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.7
+                )
+                duration_ms = (time.time() - start_time) * 1000
+                
+                text = response.choices[0].message.content
+                if text:
+                    self._update_metrics(duration_ms, source="openai")
+                    return text
+            except Exception as e:
+                logger.error(f"OpenAI Report Error: {e}")
+
+        return "Report generation failed. Please try again later."
 
     def _parse_json(self, text: str) -> Any:
         """Helper to parse JSON from AI response, cleaning up markdown if needed."""
         try:
             clean_text = text.strip()
+            # If it's a markdown response but NOT JSON, try to extract anything that looks like JSON
+            if "{" not in clean_text and "[" not in clean_text:
+                 # This might be a conversational response from a model that failed vision
+                 logger.warning(f"AI returned non-JSON text: {text[:100]}...")
+                 return {"error": "AI failed to return structured data", "raw": text}
+
             if "```json" in clean_text:
                 clean_text = clean_text.split("```json")[1].split("```")[0].strip()
             elif "```" in clean_text:
                 clean_text = clean_text.split("```")[1].split("```")[0].strip()
+            
+            # Remove any trailing commas before closing braces/brackets
+            clean_text = re.sub(r',\s*([\]}])', r'\1', clean_text)
+            
             return json.loads(clean_text)
         except Exception as e:
-            logger.error(f"JSON Parse Error: {e} | Raw: {text[:100]}...")
-            return None
+            logger.error(f"JSON Parse Error: {e} | Raw: {text[:200]}...")
+            # Try one more aggressive cleanup: find first { and last }
+            try:
+                start = clean_text.find("{")
+                end = clean_text.rfind("}") + 1
+                if start != -1 and end != 0:
+                    return json.loads(clean_text[start:end])
+            except:
+                pass
+
+            # Fallback: if it fails, try a very simple cleanup
+            try:
+                # Replace single backslashes with double backslashes, but avoid tripling existing double backslashes
+                fixed_text = re.sub(r'(?<!\\)\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})', r'\\\\', clean_text)
+                return json.loads(fixed_text)
+            except:
+                return {"error": "Structured data parsing failed", "raw": text}
 
     async def generate_landing_chat_response(self, prompt: str, history: List[Dict[str, str]] = [], language: str = "en") -> Dict[str, Any]:
         """

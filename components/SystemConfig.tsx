@@ -209,7 +209,7 @@ const SystemConfig: React.FC<SystemConfigProps> = ({ currentConfig, onUpdateConf
                     <div className="relative">
                         <input 
                             type="url" 
-                            placeholder="https://www.stanford.edu" 
+                            placeholder="https://example-university.edu" 
                             value={url}
                             onChange={(e) => setUrl(e.target.value)}
                             disabled={isScanning}
@@ -300,7 +300,19 @@ const SystemConfig: React.FC<SystemConfigProps> = ({ currentConfig, onUpdateConf
                         <div className="flex gap-4">
                             <div className="w-12 h-12 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden flex-shrink-0">
                                 {logoUrl ? (
-                                    <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                                    <img 
+                                        src={logoUrl} 
+                                        alt="Logo" 
+                                        className="w-full h-full object-contain" 
+                                        onError={(e) => {
+                                            // Fallback on error (ORB, 404, etc.)
+                                            e.currentTarget.style.display = 'none';
+                                            // Show icon instead
+                                            const icon = document.createElement('div');
+                                            icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-600"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="3" x2="21" y1="9" y2="9"/><line x1="9" x2="9" y1="21" y2="9"/></svg>';
+                                            e.currentTarget.parentElement?.appendChild(icon.firstChild!);
+                                        }}
+                                    />
                                 ) : (
                                     <Layout size={20} className="text-slate-600" />
                                 )}
