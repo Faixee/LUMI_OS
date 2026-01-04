@@ -908,11 +908,14 @@ class AIService:
                 "model": "nova-core-help"
             }
 
-        # If OpenAI client is not initialized, try to fallback to a mock response or use Gemini if available
-        # But for now, we will return a polite error if no client.
+        # If OpenAI client is not initialized, try to fallback to Gemini if available
         if not self.client:
-            logger.error("OpenAI client not initialized")
-            # FALLBACK: If OpenAI is missing, return a simulation response so the demo doesn't crash
+            if self.gemini_available and self.lumix_model:
+                logger.info("OpenAI client not initialized, falling back to Gemini for landing chat")
+                return await self._generate_gemini_landing_chat_response(prompt, history, language)
+            
+            logger.error("OpenAI client not initialized and Gemini unavailable")
+            # FALLBACK: If both are missing, return a simulation response so the demo doesn't crash
             return {
                 "response": "I am currently operating in offline simulation mode. My neural link to the OpenAI core is inactive, but I can still greet you! Welcome to LumiX.",
                 "model": "offline-simulation"
@@ -1012,12 +1015,56 @@ class AIService:
         except Exception as e:
             logger.error(f"OpenAI API Error: {e}")
             self._update_metrics(0, error=True)
+            
+            # Fallback to Gemini if OpenAI fails
+            if self.gemini_available and self.lumix_model:
+                logger.info("OpenAI failed, falling back to Gemini for landing chat")
+                return await self._generate_gemini_landing_chat_response(prompt, history, language)
+                
             error_msg = str(e)
             if "rate_limit" in error_msg.lower():
                 return {"response": "I'm receiving too many requests right now. Please wait a moment.", "error": "rate_limit_exceeded"}
             elif "invalid_api_key" in error_msg.lower():
                 return {"response": "My neural link configuration is invalid.", "error": "invalid_api_key"}
             else:
-                        return {"response": "My neural link is currently unstable. Please try again later.", "error": "provider_error"}
+                return {"response": "My neural link is currently unstable. Please try again later.", "error": "provider_error"}
+
+    async def _generate_gemini_landing_chat_response(self, prompt: str, history: List[Dict[str, str]] = [], language: str = "en") -> Dict[str, Any]:
+        """Gemini fallback for landing page chat."""
+        # Reuse the system prompt logic but adapt for Gemini
+        lang_instructions = {
+            "ur": "Respond strictly in Urdu script (اردو).",
+            "hi": "Respond strictly in Hindi Devanagari script (हिन्दी).",
+            "ar": "Respond strictly in Arabic script (العربية).",
+            "fr": "Respond in elegant French (Français).",
+            "es": "Respond in professional Spanish (Español)."
+        }
+        target_lang_instruction = lang_instructions.get(language, "Respond in natural, professional English.")
+        
+        system_prompt = f"You are NOVA, the soulful AI companion for LumiX. Created by Faizain Murtuza. {target_lang_instruction}"
+        
+        # Format history for Gemini
+        # Gemini uses 'user' and 'model' (instead of 'assistant')
+        chat = self.lumix_model.start_chat(history=[])
+        
+        # In simple implementation, we'll just send the full context as one prompt
+        # to avoid complex history conversion for now
+        context_str = "\n".join([f"{h['role']}: {h['content']}" for h in history[-5:]])
+        full_prompt = f"{system_prompt}\n\nContext:\n{context_str}\n\nUser: {prompt}"
+        
+        try:
+            start_time = time.time()
+            response = await self.lumix_model.generate_content_async(full_prompt)
+            duration_ms = (time.time() - start_time) * 1000
+            
+            self._update_metrics(duration_ms, source="gemini")
+            
+            return {
+                "response": response.text,
+                "model": "gemini-2.0-flash-fallback"
+            }
+        except Exception as e:
+            logger.error(f"Gemini Fallback Error: {e}")
+            return {"response": "My neural links are completely offline. Please check back later."}
 
 ai_service = AIService(settings.OPENAI_API_KEY, settings.GEMINI_API_KEY)
