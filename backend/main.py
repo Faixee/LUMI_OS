@@ -617,8 +617,11 @@ def dev_unlock(
     """
     # 1. Check Secret
     expected_secret = settings.INTERNAL_DEV_UNLOCK_SECRET
+    
+    print(f"DEBUG: Comparing Input '{x_internal_dev_secret}' with Expected '{expected_secret}'")
+    
     if not x_internal_dev_secret or x_internal_dev_secret.strip() != expected_secret.strip():
-        logger.warning(f"Invalid secret provided for dev unlock.")
+        logger.warning(f"Invalid secret provided for dev unlock. Input: '{x_internal_dev_secret}', Expected: '{expected_secret}'")
         raise HTTPException(status_code=403, detail=f"Invalid internal developer secret")
 
     # 2. Check Email Allowlist
