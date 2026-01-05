@@ -20,6 +20,7 @@ def test_ai_init():
     
     service = AIService(openai_key, gemini_key)
     
+    print(f"OpenAI Client Initialized: {bool(service.client)}")
     print(f"Gemini Available: {service.gemini_available}")
     if service.vision_model:
         print(f"Vision Model: {service.vision_model.model_name}")
