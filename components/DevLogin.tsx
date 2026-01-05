@@ -4,20 +4,36 @@
  * © 2025 Faizain Murtuza. All Rights Reserved.
  */
 
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Shield, Key, Mail, ArrowRight, Terminal, Unlock, Sparkles } from 'lucide-react';
 
 const DevLogin: React.FC = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [email, setEmail] = useState('');
     const [secret, setSecret] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [loginState, setLoginState] = useState<'idle' | 'granted' | 'welcome'>('idle');
 
-    const handleUnlock = async (e: React.FormEvent) => {
-        e.preventDefault();
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const urlEmail = params.get('email');
+        const urlSecret = params.get('secret');
+        const auto = params.get('auto');
+
+        if (urlEmail && urlSecret) {
+            setEmail(urlEmail);
+            setSecret(urlSecret);
+            
+            if (auto === 'true') {
+                performUnlock(urlEmail, urlSecret);
+            }
+        }
+    }, [location.search]);
+
+    const performUnlock = async (targetEmail: string, targetSecret: string) => {
         setLoading(true);
         setError('');
 
@@ -43,9 +59,9 @@ const DevLogin: React.FC = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-Internal-Dev-Secret': secret
+                    'X-Internal-Dev-Secret': targetSecret
                 },
-                body: JSON.stringify({ email })
+                body: JSON.stringify({ email: targetEmail })
             });
 
             const data = await res.json();
@@ -79,6 +95,11 @@ const DevLogin: React.FC = () => {
             setError(err.message);
             setLoading(false);
         }
+    };
+
+    const handleUnlock = async (e: React.FormEvent) => {
+        e.preventDefault();
+        performUnlock(email, secret);
     };
 
     if (loginState === 'welcome') {
