@@ -44,8 +44,16 @@ class Settings:
     STRIPE_PRICE_ENTERPRISE = os.getenv("STRIPE_PRICE_ENTERPRISE", "")
 
     DEMO_TOKEN_EXPIRE_MINUTES = int(os.getenv("DEMO_TOKEN_EXPIRE_MINUTES", "30"))
-    INTERNAL_DEV_UNLOCK_SECRET = os.getenv("INTERNAL_DEV_UNLOCK_SECRET", "")
-    DEVELOPER_EMAIL_ALLOWLIST = os.getenv("DEVELOPER_EMAIL_ALLOWLIST", "")
+    INTERNAL_DEV_UNLOCK_SECRET = os.getenv("INTERNAL_DEV_UNLOCK_SECRET", "").strip()
+    DEVELOPER_EMAIL_ALLOWLIST = os.getenv("DEVELOPER_EMAIL_ALLOWLIST", "").strip()
+    
+    # Emergency fallback if env loading fails in Docker
+    if not INTERNAL_DEV_UNLOCK_SECRET and os.path.exists(".env"):
+        from dotenv import main
+        env_vars = main.dotenv_values(".env")
+        INTERNAL_DEV_UNLOCK_SECRET = env_vars.get("INTERNAL_DEV_UNLOCK_SECRET", "").strip()
+        DEVELOPER_EMAIL_ALLOWLIST = env_vars.get("DEVELOPER_EMAIL_ALLOWLIST", "").strip()
+
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("API_KEY", "")
     XAI_API_KEY = os.getenv("XAI_API_KEY", "")
