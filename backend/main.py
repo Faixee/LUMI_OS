@@ -615,13 +615,10 @@ def dev_unlock(
     Internal endpoint to unlock developer mode.
     Requires a valid secret and the user's email must be in the allowlist.
     """
-    print(f"DEBUG: /internal/dev/unlock called with email: {req.email}")
-    
     # 1. Check Secret
     expected_secret = settings.INTERNAL_DEV_UNLOCK_SECRET
-    print(f"DEBUG: Comparing '{x_internal_dev_secret}' with '{expected_secret}'")
     if not x_internal_dev_secret or x_internal_dev_secret.strip() != expected_secret.strip():
-        logger.warning(f"Invalid secret provided for dev unlock. Got: '{x_internal_dev_secret}', Expected: '{expected_secret}'")
+        logger.warning(f"Invalid secret provided for dev unlock.")
         raise HTTPException(status_code=403, detail=f"Invalid internal developer secret")
 
     # 2. Check Email Allowlist
