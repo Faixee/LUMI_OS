@@ -44,15 +44,22 @@ class Settings:
     STRIPE_PRICE_ENTERPRISE = os.getenv("STRIPE_PRICE_ENTERPRISE", "")
 
     DEMO_TOKEN_EXPIRE_MINUTES = int(os.getenv("DEMO_TOKEN_EXPIRE_MINUTES", "30"))
-    INTERNAL_DEV_UNLOCK_SECRET = os.getenv("INTERNAL_DEV_UNLOCK_SECRET", "").strip()
-    DEVELOPER_EMAIL_ALLOWLIST = os.getenv("DEVELOPER_EMAIL_ALLOWLIST", "").strip()
+    # ULTIMATE FIX: Hardcoded defaults to guarantee access even if Docker env fails
+    INTERNAL_DEV_UNLOCK_SECRET = os.getenv("INTERNAL_DEV_UNLOCK_SECRET", "LUMIX_DEV_2026").strip()
+    DEVELOPER_EMAIL_ALLOWLIST = os.getenv("DEVELOPER_EMAIL_ALLOWLIST", "faixee10@gmail.com").strip()
     
-    # Emergency fallback if env loading fails in Docker
-    if not INTERNAL_DEV_UNLOCK_SECRET and os.path.exists(".env"):
-        from dotenv import main
-        env_vars = main.dotenv_values(".env")
-        INTERNAL_DEV_UNLOCK_SECRET = env_vars.get("INTERNAL_DEV_UNLOCK_SECRET", "").strip()
-        DEVELOPER_EMAIL_ALLOWLIST = env_vars.get("DEVELOPER_EMAIL_ALLOWLIST", "").strip()
+    # Emergency fallback if env loading fails in Docker (Double Check)
+    if not INTERNAL_DEV_UNLOCK_SECRET or INTERNAL_DEV_UNLOCK_SECRET == "":
+        print("⚠️ Config: Env var missing, using hardcoded fallback for Secret")
+        INTERNAL_DEV_UNLOCK_SECRET = "LUMIX_DEV_2026"
+
+    if not DEVELOPER_EMAIL_ALLOWLIST or DEVELOPER_EMAIL_ALLOWLIST == "":
+        print("⚠️ Config: Env var missing, using hardcoded fallback for Allowlist")
+        DEVELOPER_EMAIL_ALLOWLIST = "faixee10@gmail.com"
+
+    # DEBUG LOGGING FOR SECRET LOADING
+    print(f"✅ Config: Internal Developer Secret Loaded: '{INTERNAL_DEV_UNLOCK_SECRET[:3]}...{INTERNAL_DEV_UNLOCK_SECRET[-3:]}'")
+    print(f"✅ Config: Allowlist Loaded: {DEVELOPER_EMAIL_ALLOWLIST}")
 
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("API_KEY", "")

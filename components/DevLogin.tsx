@@ -16,6 +16,7 @@ const DevLogin: React.FC = () => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [loginState, setLoginState] = useState<'idle' | 'granted' | 'welcome'>('idle');
+    const processedRef = React.useRef(false);
 
     useEffect(() => {
         const params = new URLSearchParams(location.search);
@@ -27,13 +28,16 @@ const DevLogin: React.FC = () => {
             setEmail(urlEmail);
             setSecret(urlSecret);
             
-            if (auto === 'true') {
+            if (auto === 'true' && !processedRef.current) {
+                processedRef.current = true;
+                console.log('⚡ Auto-Login Triggered:', { email: urlEmail, secret: '***' });
                 performUnlock(urlEmail, urlSecret);
             }
         }
     }, [location.search]);
 
     const performUnlock = async (targetEmail: string, targetSecret: string) => {
+        if (loading) return;
         setLoading(true);
         setError('');
 
@@ -54,6 +58,7 @@ const DevLogin: React.FC = () => {
                 return 'http://localhost:54322';
             };
             const API_URL = getApiUrl();
+            console.log('🔌 Connecting to:', API_URL);
             
             const res = await fetch(`${API_URL}/internal/dev/unlock`, {
                 method: 'POST',
@@ -65,6 +70,7 @@ const DevLogin: React.FC = () => {
             });
 
             const data = await res.json();
+            console.log('📡 Response:', res.status, data);
 
             if (!res.ok) {
                 throw new Error(data.detail || 'Unlock failed');

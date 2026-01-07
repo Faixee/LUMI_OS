@@ -617,16 +617,20 @@ def dev_unlock(
     """
     # 1. Check Secret
     expected_secret = settings.INTERNAL_DEV_UNLOCK_SECRET
+    input_secret = x_internal_dev_secret.strip() if x_internal_dev_secret else ""
     
-    print(f"DEBUG: Comparing Input '{x_internal_dev_secret}' with Expected '{expected_secret}'")
+    print(f"🔐 AUTH DEBUG: Input='{input_secret}' | Expected='{expected_secret}' | Match={input_secret == expected_secret}")
     
-    if not x_internal_dev_secret or x_internal_dev_secret.strip() != expected_secret.strip():
-        logger.warning(f"Invalid secret provided for dev unlock. Input: '{x_internal_dev_secret}', Expected: '{expected_secret}'")
-        raise HTTPException(status_code=403, detail=f"Invalid internal developer secret")
+    if input_secret != expected_secret:
+        logger.warning(f"Invalid secret provided. Input len: {len(input_secret)}, Expected len: {len(expected_secret)}")
+        raise HTTPException(status_code=403, detail=f"Invalid internal developer secret (Mismatch)")
 
     # 2. Check Email Allowlist
-    allowlist = [e.strip().lower() for e in settings.DEVELOPER_EMAIL_ALLOWLIST.split(",") if e.strip()]
+    raw_allowlist = settings.DEVELOPER_EMAIL_ALLOWLIST
+    allowlist = [e.strip().lower() for e in raw_allowlist.split(",") if e.strip()]
     user_email = req.email.strip().lower()
+    
+    print(f"📧 EMAIL DEBUG: User='{user_email}' | Allowlist={allowlist} | Raw='{raw_allowlist}'")
     
     if user_email not in allowlist:
         print(f"DEBUG: Email {user_email} not in allowlist {allowlist}")

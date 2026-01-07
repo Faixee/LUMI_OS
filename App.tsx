@@ -11,6 +11,7 @@ import SystemApp from './components/SystemApp';
 import SubscriptionView from './components/SubscriptionView';
 import DevLogin from './components/DevLogin';
 import AboutPage from './components/AboutPage';
+import DocsPage from './components/DocsPage';
 import { authService } from './services/auth';
 
 // Demo Handler Component
@@ -163,6 +164,7 @@ const App: React.FC = () => {
         <Route path="/login" element={<LoginViewWrapper />} />
         <Route path="/dev" element={<DevLogin />} />
         <Route path="/about" element={<AboutPage />} />
+        <Route path="/docs" element={<DocsPage />} />
         <Route path="/demo" element={<DemoHandler />} />
         <Route path="/demo/:role" element={<DemoHandler />} />
         
