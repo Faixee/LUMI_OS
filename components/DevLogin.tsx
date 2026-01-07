@@ -30,8 +30,11 @@ const DevLogin: React.FC = () => {
             
             if (auto === 'true' && !processedRef.current) {
                 processedRef.current = true;
-                console.log('⚡ Auto-Login Triggered:', { email: urlEmail, secret: '***' });
-                performUnlock(urlEmail, urlSecret);
+                console.log('⚡ Auto-Login Triggered (Delayed):', { email: urlEmail, secret: '***' });
+                // Small delay to prevent ERR_ABORTED during initial page load/hydration
+                setTimeout(() => {
+                    performUnlock(urlEmail, urlSecret);
+                }, 1000);
             }
         }
     }, [location.search]);
